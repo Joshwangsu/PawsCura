@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "PawsCura",
+    "slug": "pawscura",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/Mascot.jpg",
+      "resizeMode": "contain",
+      "backgroundColor": "#F8F9FA"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pawscura.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/Mascot.jpg",
+        "backgroundColor": "#F8F9FA"
+      },
+      "package": "com.pawscura.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/Mascot.jpg",
+      "output": "single"
+    },
+    "plugins": []
+  }
+}
