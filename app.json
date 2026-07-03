@@ -15,7 +15,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8F9FA"
       },
-      "package": "com.pawscura.app"
+      "package": "com.pawscura.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAgT-OYRquR2SpMJoKjWX0_IwP3bEoGzzU"
+        }
+      }
     },
     "web": {
       "bundler": "metro",

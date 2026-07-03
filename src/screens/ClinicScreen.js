@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,36 +6,76 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Alert,
   Dimensions,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
 import ClinicCard from '../components/ClinicCard';
-import { MOCK_CLINICS } from '../data/mockData';
+import { getNearbyVeterinarians } from '../services/googleMaps';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { useSubscription } from '../context/SubscriptionContext';
+import { useNavigation } from '@react-navigation/native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function ClinicScreen() {
+  const { isPremium } = useSubscription();
+  const navigation = useNavigation();
   const [search, setSearch] = useState('');
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [clinics, setClinics] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClinic, setSelectedClinic] = useState(null);
 
-  const filtered = MOCK_CLINICS.filter(
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setErrorMsg('Permission to access location was denied');
+          setLoading(false);
+          return;
+        }
+
+        let loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
+
+        // Fetch live clinics from our API wrapper
+        const data = await getNearbyVeterinarians(loc.coords.latitude, loc.coords.longitude);
+        setClinics(data);
+      } catch (err) {
+        console.error(err);
+        setErrorMsg('Failed to fetch nearby clinics');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  let filtered = clinics.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.address.toLowerCase().includes(search.toLowerCase())
   );
+  
+  if (!isPremium) {
+    filtered = filtered.slice(0, 3);
+  }
 
   const handleNavigate = (clinic) => {
-    Alert.alert(
-      'Navigate to Clinic',
-      `Opening directions to ${clinic.name}...\n\n(Maps integration coming soon)`,
-      [{ text: 'OK' }]
-    );
+    if (!clinic.coordinates) return;
+    setSelectedClinic(clinic);
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.safe}>
       {/* ── Top Header ──────────────────────────────────── */}
       <View style={styles.topHeader}>
         <View>
@@ -48,6 +88,18 @@ export default function ClinicScreen() {
           <Ionicons name="options-outline" size={20} color={Colors.primary} />
         </TouchableOpacity>
       </View>
+
+      {/* Active Route Banner */}
+      {selectedClinic && (
+        <View style={styles.routeActiveBanner}>
+          <Text style={styles.routeActiveText} numberOfLines={1}>
+            Routing to: {selectedClinic.name}
+          </Text>
+          <TouchableOpacity onPress={() => setSelectedClinic(null)} style={styles.clearRouteBtn}>
+            <Ionicons name="close-circle" size={24} color={Colors.textInverse} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Search Bar ──────────────────────────────────── */}
       <View style={styles.searchWrapper}>
@@ -69,79 +121,71 @@ export default function ClinicScreen() {
         </View>
       </View>
 
-      {/* ── Map Placeholder ─────────────────────────────── */}
+      {/* ── Map View ─────────────────────────────── */}
       <View style={styles.mapContainer}>
-        {/* Background grid lines for map feel */}
-        <View style={styles.mapBg}>
-          {/* Horizontal grid lines */}
-          {[0.25, 0.5, 0.75].map((pos) => (
-            <View
-              key={`h-${pos}`}
-              style={[styles.gridLineH, { top: `${pos * 100}%` }]}
-            />
-          ))}
-          {/* Vertical grid lines */}
-          {[0.2, 0.4, 0.6, 0.8].map((pos) => (
-            <View
-              key={`v-${pos}`}
-              style={[styles.gridLineV, { left: `${pos * 100}%` }]}
-            />
-          ))}
-
-          {/* Mock roads */}
-          <View style={styles.mockRoadH} />
-          <View style={styles.mockRoadV} />
-
-          {/* Center content */}
-          <View style={styles.mapContent}>
-            <View style={styles.mapPinOuter}>
-              <View style={styles.mapPinInner}>
-                <Ionicons name="location" size={28} color={Colors.textInverse} />
-              </View>
-              <View style={styles.mapPinShadow} />
+        {location ? (
+          <MapView
+            style={styles.map}
+            initialRegion={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.08, // Zoomed out enough to see 5km radius
+              longitudeDelta: 0.08,
+            }}
+            showsUserLocation={true}
+            showsMyLocationButton={false} // We have a custom button if needed
+          >
+            {filtered.map((clinic) => {
+              if (!clinic.coordinates) return null;
+              
+              return (
+                <Marker
+                  key={clinic.id}
+                  coordinate={clinic.coordinates}
+                  title={clinic.name}
+                  description={clinic.isOpen ? 'Open Now' : 'Closed'}
+                >
+                  <View style={[styles.markerPin, { backgroundColor: clinic.isOpen ? Colors.success : Colors.danger }]}>
+                    <Ionicons name="medical" size={14} color={Colors.textInverse} />
+                  </View>
+                </Marker>
+              );
+            })}
+            
+            {/* Draw Route Line if a clinic is selected */}
+            {selectedClinic && location && (
+              <MapViewDirections
+                origin={location.coords}
+                destination={selectedClinic.coordinates}
+                apikey={process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}
+                strokeWidth={5}
+                strokeColor={Colors.primaryDark}
+              />
+            )}
+          </MapView>
+        ) : (
+          <View style={styles.mapBg}>
+             {/* Fallback while location is loading */}
+             <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        )}
+      </View>
+      
+      {!isPremium && (
+        <View style={styles.premiumBannerWrapper}>
+          <TouchableOpacity 
+            style={styles.premiumBanner}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Paywall')}
+          >
+            <View style={styles.premiumBannerLeft}>
+              <Ionicons name="lock-closed" size={16} color={Colors.warning} />
+              <Text style={styles.premiumBannerText}>Showing 3 nearest clinics.</Text>
             </View>
-            <Text style={styles.mapTitle}>Map View</Text>
-            <Text style={styles.mapSubtitle}>Google Maps integration coming soon</Text>
-
-            {/* Mock clinic pins */}
-            {[
-              { top: '20%', left: '25%', open: true },
-              { top: '65%', left: '70%', open: false },
-              { top: '40%', left: '80%', open: true },
-            ].map((pin, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.mockPin,
-                  { top: pin.top, left: pin.left },
-                ]}
-              >
-                <Ionicons
-                  name="location"
-                  size={20}
-                  color={pin.open ? Colors.success : Colors.danger}
-                />
-              </View>
-            ))}
-          </View>
-
-          {/* Map controls */}
-          <View style={styles.mapControls}>
-            <TouchableOpacity style={styles.mapControlBtn}>
-              <Ionicons name="add" size={20} color={Colors.primary} />
-            </TouchableOpacity>
-            <View style={styles.mapControlDivider} />
-            <TouchableOpacity style={styles.mapControlBtn}>
-              <Ionicons name="remove" size={20} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* My location button */}
-          <TouchableOpacity style={styles.myLocationBtn}>
-            <Ionicons name="locate" size={20} color={Colors.primary} />
+            <Text style={styles.premiumBannerLink}>Unlock All</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* ── Clinic List ─────────────────────────────────── */}
       <View style={styles.listHeader}>
@@ -152,23 +196,36 @@ export default function ClinicScreen() {
         </View>
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ClinicCard clinic={item} onNavigate={handleNavigate} />
-        )}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No clinics found</Text>
-            <Text style={styles.emptySubtitle}>Try adjusting your search query</Text>
-          </View>
-        }
-      />
-    </SafeAreaView>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Finding clinics near you...</Text>
+        </View>
+      ) : errorMsg ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning" size={40} color={Colors.warning} />
+          <Text style={styles.errorText}>{errorMsg}</Text>
+          <Text style={styles.errorSub}>Please enable location services to see nearby vets.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <ClinicCard clinic={item} onNavigate={handleNavigate} />
+          )}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>No clinics found</Text>
+              <Text style={styles.emptySubtitle}>Try adjusting your search query</Text>
+            </View>
+          }
+        />
+      )}
+    </View>
   );
 }
 
@@ -178,13 +235,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
 
-  // Header
+  // Top Header
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.xl + 20, // push down for status bar since no SafeAreaView
     paddingBottom: Spacing.sm,
   },
   screenTitle: {
@@ -198,12 +255,30 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   filterBtn: {
-    width: 42,
-    height: 42,
+    padding: Spacing.sm,
     backgroundColor: Colors.primaryBg,
     borderRadius: BorderRadius.md,
-    justifyContent: 'center',
+  },
+  routeActiveBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.primary,
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    ...Shadows.md,
+  },
+  routeActiveText: {
+    color: Colors.textInverse,
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  clearRouteBtn: {
+    padding: 2,
   },
 
   // Search
@@ -238,120 +313,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Shadows.md,
   },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
   mapBg: {
     flex: 1,
-    backgroundColor: '#C8DCF0',
-    position: 'relative',
-  },
-  gridLineH: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'rgba(43,90,143,0.1)',
-  },
-  gridLineV: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(43,90,143,0.1)',
-  },
-  mockRoadH: {
-    position: 'absolute',
-    top: '55%',
-    left: 0,
-    right: 0,
-    height: 8,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  mockRoadV: {
-    position: 'absolute',
-    left: '45%',
-    top: 0,
-    bottom: 0,
-    width: 8,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  mapContent: {
-    flex: 1,
+    backgroundColor: '#E8F0F8',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
-  mapPinOuter: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  mapPinInner: {
-    width: 52,
-    height: 52,
-    backgroundColor: Colors.primary,
-    borderRadius: 26,
+  markerPin: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: Colors.card,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     ...Shadows.md,
-  },
-  mapPinShadow: {
-    width: 16,
-    height: 6,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 8,
-    marginTop: 2,
-  },
-  mapTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  mapSubtitle: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 4,
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  mockPin: {
-    position: 'absolute',
-  },
-  mapControls: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.sm,
-    ...Shadows.sm,
-    overflow: 'hidden',
-  },
-  mapControlBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapControlDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  myLocationBtn: {
-    position: 'absolute',
-    left: 12,
-    bottom: 12,
-    width: 40,
-    height: 40,
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.sm,
   },
 
   // List
@@ -377,6 +356,51 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  detailText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  premiumBannerWrapper: {
+    position: 'absolute',
+    top: 140, // Below the search bar
+    left: 20,
+    right: 20,
+    zIndex: 10,
+  },
+  premiumBanner: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.warning,
+    ...Shadows.sm,
+  },
+  premiumBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  premiumBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  premiumBannerLink: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
   listContent: {
     paddingBottom: 30,
   },
@@ -393,5 +417,32 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 13,
     color: Colors.textMuted,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingTop: 40,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingHorizontal: Spacing.xl,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  errorSub: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
   },
 });

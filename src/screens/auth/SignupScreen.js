@@ -7,15 +7,18 @@ import {
   StyleSheet,
   Image,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../../services/firebaseConfig';
+import { useAuth } from '../../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
 export default function SignupScreen({ navigation }) {
+  const { reloadUser } = useAuth();
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -40,7 +43,7 @@ export default function SignupScreen({ navigation }) {
     return errs;
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -48,10 +51,32 @@ export default function SignupScreen({ navigation }) {
     }
     setErrors({});
     setIsLoading(true);
-    setTimeout(() => {
+    
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      
+      // Optionally update the user's display name
+      if (form.name) {
+        await updateProfile(userCredential.user, {
+          displayName: form.name
+        });
+        if (reloadUser) await reloadUser();
+      }
+      
+      // Navigation is handled automatically by AppNavigator reacting to AuthContext
+    } catch (error) {
+      let errorMsg = 'Failed to create account. Please try again.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = 'An account with this email already exists.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMsg = 'Password is too weak.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Invalid email address.';
+      }
+      setErrors({ form: errorMsg });
+    } finally {
       setIsLoading(false);
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-    }, 1200);
+    }
   };
 
   const FIELDS = [
@@ -93,7 +118,7 @@ export default function SignupScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={['#EBF2FB', '#F8F9FA', '#FFFFFF']}
+      colors={['#FFFFFF', '#1E3F66']}
       style={styles.gradient}
     >
       <KeyboardAvoidingView
@@ -105,26 +130,33 @@ export default function SignupScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back button */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.primary} />
-          </TouchableOpacity>
 
-          {/* Hero */}
-          <View style={styles.heroSection}>
-            <Image
-              source={require('../../../assets/Mascot.jpg')}
-              style={styles.mascot}
-              resizeMode="contain"
-            />
+          {/* Brand Top Left */}
+          <View style={styles.brandContainer}>
             <Text style={styles.appName}>PawsCura</Text>
             <Text style={styles.tagline}>Join the Pet Health Community</Text>
           </View>
 
+          {/* Hero */}
+          <View style={styles.heroSection}>
+            <Image
+              source={require('../../../assets/Landing.png')}
+              style={styles.mascot}
+              resizeMode="contain"
+            />
+          </View>
+
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Create Account 🐾</Text>
+            <Text style={styles.cardTitle}>Create Account</Text>
             <Text style={styles.cardSubtitle}>Get started with your pet's health journey</Text>
+            
+            {errors.form && (
+              <View style={styles.formErrorBox}>
+                <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+                <Text style={styles.formErrorText}>{errors.form}</Text>
+              </View>
+            )}
 
             {/* Fields */}
             {FIELDS.map((field) => {
@@ -216,14 +248,16 @@ export default function SignupScreen({ navigation }) {
                 )}
               </LinearGradient>
             </TouchableOpacity>
-          </View>
+            {/* Spacer before login */}
+            <View style={{ height: Spacing.md }} />
 
-          {/* Login link */}
-          <View style={styles.loginRow}>
-            <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={styles.loginLink}>Login</Text>
-            </TouchableOpacity>
+            {/* Login link */}
+            <View style={styles.loginRow}>
+              <Text style={styles.loginText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.goBack()}>
+                <Text style={styles.loginLink}>Login</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -237,27 +271,28 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: 60,
+    paddingTop: 80,
     paddingBottom: 40,
   },
-  backBtn: {
-    position: 'absolute',
-    top: 60,
-    left: Spacing.lg,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    zIndex: 10,
+
+  brandContainer: {
+    alignItems: 'flex-start',
+    marginTop: 20, /* to clear back button */
+    marginBottom: 10,
+    zIndex: 1,
   },
   heroSection: {
     alignItems: 'center',
     marginBottom: Spacing.lg,
-    paddingTop: 20,
+    paddingTop: 10,
   },
   mascot: {
-    width: 90,
-    height: 90,
-    marginBottom: Spacing.sm,
+    width: 380,
+    height: 380,
+    marginBottom: 0,
+    marginTop: -10,
+    zIndex: 0,
+    transform: [{ scale: 1.1 }],
   },
   appName: {
     fontSize: 28,
@@ -276,6 +311,8 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     ...Shadows.lg,
     marginBottom: Spacing.lg,
+    marginTop: -140,
+    zIndex: 1,
   },
   cardTitle: {
     fontSize: 22,
@@ -287,6 +324,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginBottom: Spacing.lg,
+  },
+  formErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dangerBg,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+    gap: 6,
+  },
+  formErrorText: {
+    fontSize: 13,
+    color: Colors.danger,
+    fontWeight: '600',
   },
   fieldGroup: {
     marginBottom: Spacing.md,

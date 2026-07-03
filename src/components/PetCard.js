@@ -34,7 +34,7 @@ export default function PetCard({ pet, onPress, isSelected = false }) {
       {/* Species chip */}
       <View style={[styles.chip, { backgroundColor: pet.color }]}>
         <Text style={[styles.chipText, { color: pet.accentColor }]}>
-          {pet.species === 'dog' ? '🐶 Dog' : '🐱 Cat'}
+          {pet.species === 'dog' ? 'Dog' : 'Cat'}
         </Text>
       </View>
     </TouchableOpacity>

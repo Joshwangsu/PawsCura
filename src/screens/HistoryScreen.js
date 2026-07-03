@@ -5,56 +5,59 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useHealth } from '../context/HealthContext';
 import HealthLogCard from '../components/HealthLogCard';
-import { MOCK_HEALTH_LOGS, MOCK_PETS } from '../data/mockData';
+import StatusBadge from '../components/StatusBadge';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 const FILTER_TABS = [
   { key: 'all', label: 'All Records' },
-  { key: 'dog', label: '🐶 Dogs' },
-  { key: 'cat', label: '🐱 Cats' },
-  { key: 'Resolved', label: '✓ Resolved' },
-  { key: 'Ongoing', label: '⚡ Ongoing' },
-  { key: 'Scheduled', label: '📅 Scheduled' },
+  { key: 'dog', label: 'Dogs' },
+  { key: 'cat', label: 'Cats' },
+  { key: 'Safe', label: 'Safe' },
+  { key: 'Moderate', label: 'Moderate' },
+  { key: 'Urgent', label: 'Urgent' },
 ];
 
 const STATUS_SUMMARY = [
   { label: 'Total', key: 'total', color: Colors.primary, bg: Colors.primaryBg, icon: 'documents-outline' },
-  { label: 'Resolved', key: 'Resolved', color: Colors.success, bg: Colors.successBg, icon: 'checkmark-circle-outline' },
-  { label: 'Ongoing', key: 'Ongoing', color: Colors.warning, bg: Colors.warningBg, icon: 'alert-circle-outline' },
-  { label: 'Scheduled', key: 'Scheduled', color: Colors.info, bg: Colors.infoBg, icon: 'calendar-outline' },
+  { label: 'Safe', key: 'Safe', color: Colors.success, bg: Colors.successBg, icon: 'checkmark-circle-outline' },
+  { label: 'Moderate', key: 'Moderate', color: Colors.warning, bg: Colors.warningBg, icon: 'alert-circle-outline' },
+  { label: 'Urgent', key: 'Urgent', color: Colors.danger, bg: Colors.dangerBg, icon: 'medical-outline' },
 ];
 
-export default function HistoryScreen() {
+export default function HistoryScreen({ navigation }) {
   const [activeFilter, setActiveFilter] = useState('all');
+  const { healthLogs, pets } = useHealth();
 
   const PET_SPECIES = useMemo(() => {
     const map = {};
-    MOCK_PETS.forEach((p) => { map[p.name] = p.species; });
+    pets.forEach((p) => { map[p.name] = p.species; });
     return map;
-  }, []);
+  }, [pets]);
 
   const filtered = useMemo(() => {
-    if (activeFilter === 'all') return MOCK_HEALTH_LOGS;
+    if (activeFilter === 'all') return healthLogs;
     if (activeFilter === 'dog')
-      return MOCK_HEALTH_LOGS.filter((l) => PET_SPECIES[l.petName] === 'dog');
+      return healthLogs.filter((l) => PET_SPECIES[l.petName] === 'dog');
     if (activeFilter === 'cat')
-      return MOCK_HEALTH_LOGS.filter((l) => PET_SPECIES[l.petName] === 'cat');
-    return MOCK_HEALTH_LOGS.filter((l) => l.status === activeFilter);
-  }, [activeFilter, PET_SPECIES]);
+      return healthLogs.filter((l) => PET_SPECIES[l.petName] === 'cat');
+    return healthLogs.filter((l) => l.status === activeFilter);
+  }, [activeFilter, healthLogs, PET_SPECIES]);
 
   const summaryData = useMemo(() => ({
-    total: MOCK_HEALTH_LOGS.length,
-    Resolved: MOCK_HEALTH_LOGS.filter((l) => l.status === 'Resolved').length,
-    Ongoing: MOCK_HEALTH_LOGS.filter((l) => l.status === 'Ongoing').length,
-    Scheduled: MOCK_HEALTH_LOGS.filter((l) => l.status === 'Scheduled').length,
-  }), []);
+    total: healthLogs.length,
+    Safe: healthLogs.filter((l) => l.status === 'Safe').length,
+    Moderate: healthLogs.filter((l) => l.status === 'Moderate').length,
+    Urgent: healthLogs.filter((l) => l.status === 'Urgent').length,
+  }), [healthLogs]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.safe}>
       {/* ── Header ──────────────────────────────────────── */}
       <View style={styles.header}>
         <View>
@@ -63,9 +66,7 @@ export default function HistoryScreen() {
             {filtered.length} record{filtered.length !== 1 ? 's' : ''} found
           </Text>
         </View>
-        <TouchableOpacity style={styles.addBtn}>
-          <Ionicons name="add" size={22} color={Colors.textInverse} />
-        </TouchableOpacity>
+
       </View>
 
       {/* ── Summary Cards ───────────────────────────────── */}
@@ -130,7 +131,7 @@ export default function HistoryScreen() {
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -146,7 +147,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.xl + 20,
     paddingBottom: Spacing.sm,
   },
   screenTitle: {
@@ -159,15 +160,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
   },
-  addBtn: {
-    width: 42,
-    height: 42,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.sm,
-  },
+
 
   // Summary
   summaryRow: {
@@ -197,10 +190,13 @@ const styles = StyleSheet.create({
   tabsScroll: {
     flexGrow: 0,
     marginBottom: Spacing.sm,
+    minHeight: 46,
   },
   tabsList: {
     paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
     gap: Spacing.sm,
+    alignItems: 'center',
   },
   tab: {
     paddingHorizontal: Spacing.md,
@@ -209,6 +205,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderWidth: 1.5,
     borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
   },
   activeTab: {
     backgroundColor: Colors.primary,

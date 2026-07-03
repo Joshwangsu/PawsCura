@@ -7,12 +7,13 @@ import {
   StyleSheet,
   Image,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../services/firebaseConfig';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
 export default function LoginScreen({ navigation }) {
@@ -31,7 +32,7 @@ export default function LoginScreen({ navigation }) {
     return errs;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -39,24 +40,27 @@ export default function LoginScreen({ navigation }) {
     }
     setErrors({});
     setIsLoading(true);
-    // Simulate async auth
-    setTimeout(() => {
+    
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // Navigation is handled automatically by AppNavigator reacting to AuthContext
+    } catch (error) {
+      let errorMsg = 'Failed to log in. Please try again.';
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMsg = 'Invalid email or password.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMsg = 'Too many failed attempts. Try again later.';
+      }
+      setErrors({ form: errorMsg });
+    } finally {
       setIsLoading(false);
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-    }, 1200);
+    }
   };
 
-  const handleDemoLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-    }, 800);
-  };
 
   return (
     <LinearGradient
-      colors={['#EBF2FB', '#F8F9FA', '#FFFFFF']}
+      colors={['#FFFFFF', '#1E3F66']}
       style={styles.gradient}
     >
       <KeyboardAvoidingView
@@ -68,21 +72,32 @@ export default function LoginScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mascot + Brand */}
-          <View style={styles.heroSection}>
-            <Image
-              source={require('../../../assets/Mascot.jpg')}
-              style={styles.mascot}
-              resizeMode="contain"
-            />
+          {/* Brand Top Left */}
+          <View style={styles.brandContainer}>
             <Text style={styles.appName}>PawsCura</Text>
             <Text style={styles.tagline}>Your Pet's Health, Our Priority</Text>
           </View>
 
+          {/* Mascot */}
+          <View style={styles.heroSection}>
+            <Image
+              source={require('../../../assets/Landing.png')}
+              style={styles.mascot}
+              resizeMode="contain"
+            />
+          </View>
+
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Welcome Back! 👋</Text>
+            <Text style={styles.cardTitle}>Welcome Back!</Text>
             <Text style={styles.cardSubtitle}>Login to manage your pet's health</Text>
+            
+            {errors.form && (
+              <View style={styles.formErrorBox}>
+                <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+                <Text style={styles.formErrorText}>{errors.form}</Text>
+              </View>
+            )}
 
             {/* Email */}
             <View style={styles.fieldGroup}>
@@ -156,31 +171,16 @@ export default function LoginScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
+            {/* Spacer before sign up */}
+            <View style={{ height: Spacing.md }} />
+
+            {/* Sign up link */}
+            <View style={styles.signupRow}>
+              <Text style={styles.signupText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+                <Text style={styles.signupLink}>Sign Up</Text>
+              </TouchableOpacity>
             </View>
-
-            {/* Demo login */}
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={handleDemoLogin}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="flash-outline" size={16} color={Colors.primary} />
-              <Text style={styles.demoBtnText}>Continue with Demo Account</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Sign up link */}
-          <View style={styles.signupRow}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-              <Text style={styles.signupLink}>Sign Up</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -194,17 +194,27 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: 60,
+    paddingTop: 80,
     paddingBottom: 40,
+  },
+  brandContainer: {
+    alignItems: 'flex-start',
+    marginTop: 0,
+    marginBottom: 10,
+    zIndex: 1,
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+    paddingTop: 0,
   },
   mascot: {
-    width: 120,
-    height: 120,
-    marginBottom: Spacing.sm,
+    width: 380,
+    height: 380,
+    marginBottom: 0,
+    marginTop: -10,
+    zIndex: 0,
+    transform: [{ scale: 1.1 }],
   },
   appName: {
     fontSize: 32,
@@ -224,6 +234,8 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     ...Shadows.lg,
     marginBottom: Spacing.lg,
+    marginTop: -140,
+    zIndex: 1,
   },
   cardTitle: {
     fontSize: 22,
@@ -235,6 +247,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginBottom: Spacing.lg,
+  },
+  formErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dangerBg,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+    gap: 6,
+  },
+  formErrorText: {
+    fontSize: 13,
+    color: Colors.danger,
+    fontWeight: '600',
   },
   fieldGroup: {
     marginBottom: Spacing.md,
@@ -302,36 +328,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  demoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 14,
-  },
-  demoBtnText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',

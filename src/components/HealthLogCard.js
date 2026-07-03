@@ -1,20 +1,22 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
-const STATUS_BORDER_COLOR = {
-  Resolved: Colors.success,
-  Ongoing: Colors.warning,
-  Scheduled: Colors.info,
-};
-
-export default function HealthLogCard({ log }) {
-  const borderColor = STATUS_BORDER_COLOR[log.status] || Colors.primary;
+export default function HealthLogCard({ log, onPress }) {
+  const [showModal, setShowModal] = useState(false);
+  const navigation = useNavigation();
+  
+  const handlePress = () => {
+    if (onPress) onPress();
+    else setShowModal(true);
+  };
 
   return (
-    <View style={[styles.card, { borderLeftColor: borderColor }]}>
+    <>
+    <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={handlePress}>
       {/* Top row: date + status */}
       <View style={styles.topRow}>
         <View style={styles.dateRow}>
@@ -55,7 +57,60 @@ export default function HealthLogCard({ log }) {
           <Text style={styles.metaText}>{log.vet}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
+
+    {/* Record Details Modal */}
+    <Modal visible={showModal} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.detailsModal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Record Details</Text>
+            <TouchableOpacity onPress={() => setShowModal(false)}>
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>{log.date}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status</Text>
+              <StatusBadge status={log.status} />
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Pet</Text>
+              <Text style={styles.detailValue}>{log.petEmoji} {log.petName}</Text>
+            </View>
+            
+            <View style={styles.divider} />
+            
+            <Text style={styles.detailLabel}>Condition</Text>
+            <Text style={styles.detailValuePrimary}>{log.issue}</Text>
+            
+            <Text style={[styles.detailLabel, { marginTop: Spacing.md }]}>Observations & Analysis</Text>
+            <Text style={styles.detailText}>{log.description}</Text>
+
+            <TouchableOpacity 
+              style={styles.chatbotLinkBtn}
+              onPress={() => {
+                const ctx = {
+                  suspectedCondition: log.issue,
+                  analysis: log.description
+                };
+                setShowModal(false);
+                navigation.navigate('Chatbot', { initialContext: ctx });
+              }}
+            >
+              <Ionicons name="chatbubbles" size={18} color="#fff" />
+              <Text style={styles.chatbotLinkText}>Chat with Vet about this</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -66,7 +121,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
-    borderLeftWidth: 4,
     ...Shadows.sm,
     gap: 8,
   },
@@ -138,5 +192,78 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textMuted,
     flex: 1,
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  detailsModal: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    height: '80%',
+    padding: Spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  detailsScroll: {
+    paddingBottom: Spacing.xl,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  detailValuePrimary: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginTop: 4,
+  },
+  detailText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    lineHeight: 22,
+    marginTop: 6,
+  },
+  chatbotLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.full,
+    marginTop: Spacing.xl,
+    gap: 8,
+    ...Shadows.sm,
+  },
+  chatbotLinkText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

@@ -9,13 +9,6 @@ export default function ClinicCard({ clinic, onNavigate }) {
 
   return (
     <View style={styles.card}>
-      {/* Left accent bar */}
-      <View
-        style={[
-          styles.accentBar,
-          { backgroundColor: clinic.isOpen ? Colors.success : Colors.textMuted },
-        ]}
-      />
 
       <View style={styles.content}>
         {/* Header row */}
@@ -94,9 +87,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Shadows.sm,
   },
-  accentBar: {
-    width: 4,
-  },
+
   content: {
     flex: 1,
     padding: Spacing.md,

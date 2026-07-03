@@ -3,6 +3,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
+import PetsScreen from '../screens/PetsScreen';
+import ScanScreen from '../screens/ScanScreen';
 import ClinicScreen from '../screens/ClinicScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import { Colors, Shadows } from '../theme/colors';
@@ -26,49 +28,95 @@ function TabIcon({ name, focused, badge }) {
   );
 }
 
+function ScanTabIcon({ focused }) {
+  return (
+    <View style={[
+      styles.scanIconWrapper,
+      focused && styles.scanIconWrapperActive,
+    ]}>
+      <Ionicons
+        name={focused ? 'scan' : 'scan-outline'}
+        size={26}
+        color="#fff"
+      />
+    </View>
+  );
+}
+
+import DraggableChatbot from '../components/DraggableChatbot';
+
 export default function BottomTabNavigator() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: Colors.tabActive,
-        tabBarInactiveTintColor: Colors.tabInactive,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarItemStyle: styles.tabItem,
-      }}
-    >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="home" focused={focused} />
-          ),
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: styles.tabBar,
+          tabBarActiveTintColor: Colors.tabActive,
+          tabBarInactiveTintColor: Colors.tabInactive,
+          tabBarLabelStyle: styles.tabLabel,
+          tabBarItemStyle: styles.tabItem,
         }}
-      />
-      <Tab.Screen
-        name="Clinics"
-        component={ClinicScreen}
-        options={{
-          tabBarLabel: 'Clinics',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="location" focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{
-          tabBarLabel: 'Records',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="document-text" focused={focused} badge="8" />
-          ),
-        }}
-      />
-    </Tab.Navigator>
+      >
+        <Tab.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'Home',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="home" focused={focused} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Pets"
+          component={PetsScreen}
+          options={{
+            tabBarLabel: 'Pets',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="paw" focused={focused} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Scan"
+          component={ScanScreen}
+          options={{
+            tabBarLabel: 'Scan',
+            tabBarIcon: ({ focused }) => <ScanTabIcon focused={focused} />,
+            tabBarLabelStyle: {
+              fontSize: 11,
+              fontWeight: '700',
+              color: Colors.primary,
+              marginTop: 4,
+            },
+          }}
+        />
+        <Tab.Screen
+          name="Clinics"
+          component={ClinicScreen}
+          options={{
+            tabBarLabel: 'Clinics',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="location" focused={focused} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{
+            tabBarLabel: 'Records',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="document-text" focused={focused} />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+      
+      {/* Global Floating Chatbot Button */}
+      <DraggableChatbot />
+    </View>
   );
 }
 
@@ -88,6 +136,20 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     paddingVertical: 4,
+  },
+  // Scan center button
+  scanIconWrapper: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -18,
+    ...Shadows.md,
+  },
+  scanIconWrapperActive: {
+    backgroundColor: Colors.primary,
   },
   iconWrapper: {
     position: 'relative',

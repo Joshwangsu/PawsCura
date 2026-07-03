@@ -6,28 +6,48 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { signOut } from 'firebase/auth';
+import { auth } from '../services/firebaseConfig';
 import PetCard from '../components/PetCard';
 import HealthLogCard from '../components/HealthLogCard';
-import { MOCK_PETS, MOCK_HEALTH_LOGS, MOCK_USER } from '../data/mockData';
+import { useHealth } from '../context/HealthContext';
+import { useAuth } from '../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
-const QUICK_ACTIONS = [
-  { id: 'qa1', icon: 'heart-outline', label: 'Health Check', color: '#EF4444', bg: '#FEE2E2' },
-  { id: 'qa2', icon: 'calendar-outline', label: 'Book Appointment', color: '#8B5CF6', bg: '#EDE9FE' },
-  { id: 'qa3', icon: 'document-text-outline', label: 'View Records', color: '#F59E0B', bg: '#FEF3C7' },
-  { id: 'qa4', icon: 'nutrition-outline', label: 'Diet Tracker', color: '#22C55E', bg: '#DCFCE7' },
-];
 
 export default function HomeScreen({ navigation }) {
-  const [selectedPet, setSelectedPet] = useState(MOCK_PETS[0].id);
-  const recentLogs = MOCK_HEALTH_LOGS.slice(0, 2);
+  const { pets, healthLogs } = useHealth();
+  const { user } = useAuth();
+  
+  const [selectedPet, setSelectedPet] = useState(pets.length > 0 ? pets[0].id : null);
+  const recentLogs = healthLogs.slice(0, 2);
+  
+  const displayName = user?.displayName || 'User';
+  const initial = displayName.charAt(0).toUpperCase();
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning!';
+    if (hour < 18) return 'Good Afternoon!';
+    return 'Good Evening!';
+  };
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout Error:', error);
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.safe}>
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -41,75 +61,24 @@ export default function HomeScreen({ navigation }) {
           style={styles.header}
         >
           <View style={styles.headerInner}>
-            <View>
-              <Text style={styles.greetingLabel}>Good Morning! 🌤</Text>
-              <Text style={styles.greetingName}>Hello, {MOCK_USER.name} 👋</Text>
-              <Text style={styles.greetingSubtext}>How are your pets today?</Text>
+            <View style={styles.headerLeft}>
+              <Text style={styles.greetingLabel}>{getGreeting()}</Text>
+              <Text style={styles.greetingName} numberOfLines={1}>Hello, {displayName}</Text>
+              <Text style={styles.greetingSubtext} numberOfLines={1}>How are your pets today?</Text>
             </View>
 
             <View style={styles.headerRight}>
-              {/* Notification bell */}
-              <TouchableOpacity style={styles.notifBtn}>
-                <Ionicons name="notifications-outline" size={22} color={Colors.textInverse} />
-                <View style={styles.notifDot} />
-              </TouchableOpacity>
-
-              {/* Avatar */}
-              <View style={styles.avatar}>
+              {/* Avatar / Logout */}
+              <TouchableOpacity style={styles.avatar} onPress={() => setShowLogoutModal(true)} activeOpacity={0.7}>
                 <Text style={styles.avatarText}>
-                  {MOCK_USER.name.charAt(0).toUpperCase()}
+                  {initial}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Stats row */}
-          <View style={styles.statsRow}>
-            {[
-              { label: 'My Pets', value: MOCK_PETS.length, icon: 'paw' },
-              { label: 'This Month', value: '3', icon: 'calendar' },
-              { label: 'Next Visit', value: 'Jun 30', icon: 'medical' },
-            ].map((stat) => (
-              <View key={stat.label} style={styles.statItem}>
-                <Ionicons name={stat.icon} size={18} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
-          </View>
         </LinearGradient>
 
-        {/* ── Health Assessment CTA ─────────────────────── */}
-        <View style={styles.ctaWrapper}>
-          <TouchableOpacity
-            style={styles.ctaBtn}
-            activeOpacity={0.7}
-            disabled
-          >
-            <LinearGradient
-              colors={['#1E3F66', Colors.primary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
-            >
-              <View style={styles.ctaLeft}>
-                <View style={styles.ctaIconBox}>
-                  <Ionicons name="pulse" size={26} color={Colors.textInverse} />
-                </View>
-                <View>
-                  <Text style={styles.ctaTitle}>Start Health Assessment</Text>
-                  <Text style={styles.ctaSubtitle}>Quick 5-min wellness check for your pet</Text>
-                </View>
-              </View>
-              <View style={styles.ctaArrow}>
-                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.6)" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-          <View style={styles.ctaBadge}>
-            <Text style={styles.ctaBadgeText}>Coming Soon</Text>
-          </View>
-        </View>
 
         {/* ── My Pets ───────────────────────────────────── */}
         <View style={styles.section}>
@@ -121,42 +90,37 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <FlatList
-            data={MOCK_PETS}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.petsList}
-            renderItem={({ item }) => (
-              <PetCard
-                pet={item}
-                isSelected={selectedPet === item.id}
-                onPress={() => setSelectedPet(item.id)}
-              />
-            )}
-          />
+          {pets.length === 0 ? (
+            <TouchableOpacity 
+              style={[styles.emptyCard, { marginHorizontal: Spacing.md }]} 
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Pets')}
+            >
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="paw-outline" size={32} color={Colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No Pets Added</Text>
+              <Text style={styles.emptySubtext}>Tap here to register your first furry friend!</Text>
+            </TouchableOpacity>
+          ) : (
+            <FlatList
+              data={pets}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.petsList}
+              renderItem={({ item }) => (
+                <PetCard
+                  pet={item}
+                  isSelected={selectedPet === item.id}
+                  onPress={() => setSelectedPet(item.id)}
+                />
+              )}
+            />
+          )}
         </View>
 
-        {/* ── Quick Actions ─────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            {QUICK_ACTIONS.map((action) => (
-              <TouchableOpacity
-                key={action.id}
-                style={styles.actionItem}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: action.bg }]}>
-                  <Ionicons name={action.icon} size={24} color={action.color} />
-                </View>
-                <Text style={styles.actionLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* ── Recent Activity ───────────────────────────── */}
+{/* ── Recent Activity ───────────────────────────── */}
         <View style={[styles.section, styles.lastSection]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
@@ -169,12 +133,61 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {recentLogs.map((log) => (
-            <HealthLogCard key={log.id} log={log} />
-          ))}
+          {recentLogs.length === 0 ? (
+            <TouchableOpacity 
+              style={[styles.emptyCard, { marginHorizontal: Spacing.md }]} 
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Scan')}
+            >
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="scan-outline" size={32} color={Colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No Health Records</Text>
+              <Text style={styles.emptySubtext}>Use the AI Assessment tool to generate a health report.</Text>
+            </TouchableOpacity>
+          ) : (
+            recentLogs.map((log) => (
+              <HealthLogCard key={log.id} log={log} />
+            ))
+          )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Logout Custom Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.logoutModal}>
+            <View style={styles.logoutIconBox}>
+              <Ionicons name="log-out-outline" size={32} color={Colors.danger} />
+            </View>
+            <Text style={styles.logoutTitle}>Log Out</Text>
+            <Text style={styles.logoutSubtext}>Are you sure you want to log out of your account?</Text>
+            
+            <View style={styles.logoutActions}>
+              <TouchableOpacity 
+                style={styles.logoutCancelBtn} 
+                onPress={() => setShowLogoutModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.logoutCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.logoutConfirmBtn} 
+                onPress={handleLogout}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.logoutConfirmText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -183,12 +196,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  scroll: { flex: 1 },
+  scroll: { 
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   content: { paddingBottom: 30 },
 
   // Header
   header: {
-    paddingTop: Spacing.lg,
+    paddingTop: 60,
     paddingBottom: Spacing.xl,
     paddingHorizontal: Spacing.lg,
     borderBottomLeftRadius: 28,
@@ -197,8 +213,11 @@ const styles = StyleSheet.create({
   headerInner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.lg,
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flex: 1,
+    paddingRight: Spacing.md,
   },
   greetingLabel: {
     fontSize: 13,
@@ -219,27 +238,6 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  notifBtn: {
-    position: 'relative',
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notifDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    backgroundColor: '#EF4444',
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
   },
   avatar: {
     width: 44,
@@ -256,25 +254,37 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textInverse,
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-  },
-  statItem: {
+
+  // Empty States
+  emptyCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
     alignItems: 'center',
-    gap: 3,
+    justifyContent: 'center',
+    ...Shadows.md,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.textInverse,
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primaryBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  statLabel: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.75)',
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: Colors.textSecondary,
     textAlign: 'center',
   },
 
@@ -376,29 +386,71 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  // Quick actions
-  actionsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: Spacing.md,
-  },
-  actionItem: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: BorderRadius.lg,
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadows.sm,
+    padding: Spacing.lg,
   },
-  actionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+  logoutModal: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    width: '100%',
+    alignItems: 'center',
+    ...Shadows.lg,
+  },
+  logoutIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.dangerBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  logoutTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  logoutSubtext: {
+    fontSize: 15,
     color: Colors.textSecondary,
     textAlign: 'center',
-    maxWidth: 64,
+    marginBottom: Spacing.xl,
   },
+  logoutActions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    width: '100%',
+  },
+  logoutCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: Colors.inputBg,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  logoutCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  logoutConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: Colors.danger,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  logoutConfirmText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textInverse,
+  },
+
 });
