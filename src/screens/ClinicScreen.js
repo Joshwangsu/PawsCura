@@ -33,30 +33,33 @@ export default function ClinicScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedClinic, setSelectedClinic] = useState(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setErrorMsg('Permission to access location was denied');
-          setLoading(false);
-          return;
-        }
-
-        let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc);
-
-        // Fetch live clinics from our API wrapper
-        const data = await getNearbyVeterinarians(loc.coords.latitude, loc.coords.longitude);
-        setClinics(data);
-      } catch (err) {
-        console.error(err);
-        setErrorMsg('Failed to fetch nearby clinics');
-      } finally {
+  const loadLocation = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setErrorMsg('Permission to access location was denied');
         setLoading(false);
+        return;
       }
-    })();
+
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
+
+      // Fetch live clinics from our API wrapper
+      const data = await getNearbyVeterinarians(loc.coords.latitude, loc.coords.longitude);
+      setClinics(data);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to fetch nearby clinics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLocation();
   }, []);
 
   let filtered = clinics.filter(
@@ -163,6 +166,22 @@ export default function ClinicScreen() {
               />
             )}
           </MapView>
+        ) : errorMsg ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="location-outline" size={48} color={Colors.danger} />
+            <Text style={styles.errorText}>Location Permission Denied</Text>
+            <Text style={styles.errorSub}>
+              We need location access to find clinics near you. Please grant permission in your system settings.
+            </Text>
+            <View style={styles.errorBtnRow}>
+              <TouchableOpacity style={styles.errorBtn} onPress={loadLocation}>
+                <Text style={styles.errorBtnText}>Try Again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.errorBtn, styles.errorBtnSecondary]} onPress={() => Linking.openSettings()}>
+                <Text style={[styles.errorBtnText, styles.errorBtnTextSecondary]}>Open Settings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           <View style={styles.mapBg}>
              {/* Fallback while location is loading */}
@@ -444,5 +463,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     textAlign: 'center',
+  },
+  errorBtnRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  errorBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+  errorBtnSecondary: {
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  errorBtnText: {
+    color: Colors.textInverse,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  errorBtnTextSecondary: {
+    color: Colors.primary,
   },
 });

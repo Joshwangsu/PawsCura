@@ -13,12 +13,19 @@ Analyze the image carefully.
 
 Respond ONLY with a valid JSON object using the following exact keys:
 {
-  "suspectedCondition": "A brief name of the suspected condition (e.g., 'Flea Allergy Dermatitis', 'Superficial Laceration')",
+  "suspectedCondition": "A brief name of the primary suspected condition (e.g., 'Flea Allergy Dermatitis', 'Superficial Laceration')",
+  "confidence": A number representing your confidence percentage in this primary suspected condition (e.g., 85),
+  "alternatives": [
+    {
+      "condition": "A brief name of an alternative suspected condition",
+      "confidence": A number representing the alternative's confidence percentage
+    }
+  ],
   "urgencyLevel": "Exactly one of these three strings: 'No Concerns Detected', 'Needs Evaluation', or 'Immediate Care'",
   "analysis": "A 2-3 sentence description of what you observe in the image.",
   "recommendedAction": "A 1-2 sentence recommendation for the owner (e.g., 'Clean with mild soap', 'Visit a vet within 24 hours')."
 }
-Do NOT wrap the response in markdown code blocks (\`\`\`json). Return raw JSON only.
+Ensure the sum of the primary confidence and alternative confidences does not exceed 100%. Do NOT wrap the response in markdown code blocks (\`\`\`json). Return raw JSON only.
 `;
 
 export async function chatWithVet(messageHistory) {
@@ -75,6 +82,11 @@ export async function analyzePetCondition(base64Image, mimeType) {
       setTimeout(() => {
         resolve({
           suspectedCondition: "Mild Hot Spot (Acute Moist Dermatitis)",
+          confidence: 75,
+          alternatives: [
+            { condition: "Allergic Dermatitis", confidence: 15 },
+            { condition: "Flea Bite Hypersensitivity", confidence: 10 }
+          ],
           urgencyLevel: "Needs Evaluation",
           analysis: "I observe a localized area of redness, inflammation, and possible fur loss. It appears irritated and may be itchy or painful for the pet.",
           recommendedAction: "Prevent the pet from scratching or licking the area. Clean gently with a pet-safe antiseptic and consider a veterinary visit if it worsens or doesn't improve in 24 hours."

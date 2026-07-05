@@ -27,11 +27,12 @@ const SCAN_TIPS = [
 ];
 
 export default function ScanScreen() {
-  const { pets, addHealthLog } = useHealth();
+  const { pets, healthLogs, addHealthLog } = useHealth();
   const { isPremium, scanUsage, incrementScanCount } = useSubscription();
   const navigation = useNavigation();
   const [imageUri, setImageUri] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
   const [showPetModal, setShowPetModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -45,9 +46,52 @@ export default function ScanScreen() {
     }
   }, [result, loading]);
 
+  const uploadToCloudinary = async (uri) => {
+    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      console.warn("Cloudinary configuration missing! Check .env variables.");
+      return uri;
+    }
+
+    const data = new FormData();
+    const mimeType = uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+    data.append('file', {
+      uri: uri,
+      type: mimeType,
+      name: `upload_${Date.now()}.${uri.endsWith('.png') ? 'png' : 'jpg'}`,
+    });
+    data.append('upload_preset', uploadPreset);
+    data.append('cloud_name', cloudName);
+
+    try {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: data,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Cloudinary upload failed: ${errText}`);
+      }
+
+      const responseData = await response.json();
+      return responseData.secure_url;
+    } catch (error) {
+      console.error("Cloudinary upload error:", error);
+      throw error;
+    }
+  };
+
   const handlePickImage = async (useCamera = false) => {
     try {
-      if (!isPremium && scanUsage.count >= 2) {
+      if (!isPremium && scanUsage.count >= 1) {
         navigation.navigate('Paywall');
         return;
       }
@@ -105,25 +149,39 @@ export default function ScanScreen() {
     }
   };
 
-  const handleSaveToRecords = (pet) => {
+  const handleSaveToRecords = async (pet) => {
     if (!result) return;
     
-    // Create new health log object matching the mock schema
-    const newLog = {
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      petName: pet.name,
-      petEmoji: pet.emoji,
-      breed: pet.breed,
-      issue: result.suspectedCondition,
-      description: result.analysis,
-      status: result.urgencyLevel,
-      clinic: 'AI Assessment',
-      vet: 'Virtual Vet Assistant'
-    };
-    
-    addHealthLog(newLog);
-    setShowPetModal(false);
-    setShowSuccessModal(true);
+    setSaving(true);
+    try {
+      let finalImageUrl = null;
+      if (imageUri) {
+        finalImageUrl = await uploadToCloudinary(imageUri);
+      }
+
+      // Create new health log object matching the mock schema
+      const newLog = {
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        petName: pet.name,
+        petEmoji: pet.emoji,
+        breed: pet.breed,
+        issue: result.suspectedCondition,
+        description: result.analysis,
+        status: result.urgencyLevel,
+        clinic: 'AI Assessment',
+        vet: 'Virtual Vet Assistant',
+        imageUrl: finalImageUrl
+      };
+      
+      await addHealthLog(newLog);
+      setShowPetModal(false);
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error(error);
+      alert("Could not upload assessment photo to Cloudinary. Please check your internet connection and settings.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getUrgencyColor = (urgency) => {
@@ -203,8 +261,22 @@ export default function ScanScreen() {
 
             <View style={styles.resultSection}>
               <Text style={styles.resultLabel}>Suspected Condition</Text>
-              <Text style={styles.resultValuePrimary}>{result.suspectedCondition}</Text>
+              <Text style={styles.resultValuePrimary}>
+                {result.suspectedCondition}
+                {result.confidence !== undefined && ` (${result.confidence}%)`}
+              </Text>
             </View>
+
+            {result.alternatives && result.alternatives.length > 0 && (
+              <View style={styles.resultSection}>
+                <Text style={styles.resultLabel}>Other Possibilities</Text>
+                {result.alternatives.map((alt, idx) => (
+                  <Text key={idx} style={styles.alternativeText}>
+                    • {alt.condition} ({alt.confidence}%)
+                  </Text>
+                ))}
+              </View>
+            )}
 
             <View style={styles.resultSection}>
               <Text style={styles.resultLabel}>Observations</Text>
@@ -231,7 +303,13 @@ export default function ScanScreen() {
 
               <TouchableOpacity 
                 style={[styles.chatbotLinkBtn, { flex: 1, marginTop: 0, backgroundColor: Colors.success }]}
-                onPress={() => setShowPetModal(true)}
+                onPress={() => {
+                  if (!isPremium && healthLogs.length >= 1) {
+                    navigation.navigate('Paywall');
+                  } else {
+                    setShowPetModal(true);
+                  }
+                }}
               >
                 <Ionicons name="save-outline" size={18} color="#fff" />
                 <Text style={styles.chatbotLinkText}>Save to Record</Text>
@@ -381,6 +459,14 @@ export default function ScanScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Saving Overlay */}
+      {saving && (
+        <View style={styles.savingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.savingText}>Saving assessment and uploading image...</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -592,6 +678,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textPrimary,
     lineHeight: 20,
+  },
+  alternativeText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    lineHeight: 20,
+    marginTop: 4,
   },
   disclaimerText: {
     fontSize: 11,
@@ -847,5 +939,18 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  savingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  savingText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
   },
 });

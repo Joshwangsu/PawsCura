@@ -1,132 +1,203 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Modal,
-  ScrollView,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useHealth } from '../context/HealthContext';
 import HealthLogCard from '../components/HealthLogCard';
-import StatusBadge from '../components/StatusBadge';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
-const FILTER_TABS = [
-  { key: 'all', label: 'All Records' },
-  { key: 'dog', label: 'Dogs' },
-  { key: 'cat', label: 'Cats' },
-  { key: 'Safe', label: 'Safe' },
-  { key: 'Moderate', label: 'Moderate' },
-  { key: 'Urgent', label: 'Urgent' },
-];
-
-const STATUS_SUMMARY = [
-  { label: 'Total', key: 'total', color: Colors.primary, bg: Colors.primaryBg, icon: 'documents-outline' },
-  { label: 'Safe', key: 'Safe', color: Colors.success, bg: Colors.successBg, icon: 'checkmark-circle-outline' },
-  { label: 'Moderate', key: 'Moderate', color: Colors.warning, bg: Colors.warningBg, icon: 'alert-circle-outline' },
-  { label: 'Urgent', key: 'Urgent', color: Colors.danger, bg: Colors.dangerBg, icon: 'medical-outline' },
-];
-
 export default function HistoryScreen({ navigation }) {
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [selectedPet, setSelectedPet] = useState(null);
+  const [activeDiseaseFilter, setActiveDiseaseFilter] = useState('All');
   const { healthLogs, pets } = useHealth();
 
-  const PET_SPECIES = useMemo(() => {
-    const map = {};
-    pets.forEach((p) => { map[p.name] = p.species; });
-    return map;
-  }, [pets]);
+  // Reset filter when changing pets
+  const handleSelectPet = (pet) => {
+    setActiveDiseaseFilter('All');
+    setSelectedPet(pet);
+  };
 
-  const filtered = useMemo(() => {
-    if (activeFilter === 'all') return healthLogs;
-    if (activeFilter === 'dog')
-      return healthLogs.filter((l) => PET_SPECIES[l.petName] === 'dog');
-    if (activeFilter === 'cat')
-      return healthLogs.filter((l) => PET_SPECIES[l.petName] === 'cat');
-    return healthLogs.filter((l) => l.status === activeFilter);
-  }, [activeFilter, healthLogs, PET_SPECIES]);
+  // Handle hardware / system swipe back gesture to return to pet list instead of closing tab
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (selectedPet) {
+          setSelectedPet(null);
+          return true; // Prevents default React Navigation back to previous tab
+        }
+        return false; // Standard navigation
+      };
 
-  const summaryData = useMemo(() => ({
-    total: healthLogs.length,
-    Safe: healthLogs.filter((l) => l.status === 'Safe').length,
-    Moderate: healthLogs.filter((l) => l.status === 'Moderate').length,
-    Urgent: healthLogs.filter((l) => l.status === 'Urgent').length,
-  }), [healthLogs]);
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-  return (
-    <View style={styles.safe}>
-      {/* ── Header ──────────────────────────────────────── */}
-      <View style={styles.header}>
-        <View>
+      return () => subscription.remove();
+    }, [selectedPet])
+  );
+
+  // Filter logs for the selected pet
+  const petLogs = useMemo(() => {
+    if (!selectedPet) return [];
+    return healthLogs.filter((log) => log.petName.toLowerCase() === selectedPet.name.toLowerCase());
+  }, [healthLogs, selectedPet]);
+
+  // Extract unique disease list from pet's logs to populate filter tabs dynamically
+  const uniqueDiseases = useMemo(() => {
+    const list = ['All'];
+    petLogs.forEach((log) => {
+      if (log.issue && !list.includes(log.issue)) {
+        list.push(log.issue);
+      }
+    });
+    return list;
+  }, [petLogs]);
+
+  // Filter logs based on the selected disease tab
+  const filteredLogs = useMemo(() => {
+    if (activeDiseaseFilter === 'All') return petLogs;
+    return petLogs.filter((log) => log.issue === activeDiseaseFilter);
+  }, [petLogs, activeDiseaseFilter]);
+
+  // View 1: Select a Pet
+  if (!selectedPet) {
+    return (
+      <View style={styles.safe}>
+        {/* Header */}
+        <View style={styles.header}>
           <Text style={styles.screenTitle}>Pet Health Records</Text>
-          <Text style={styles.screenSubtitle}>
-            {filtered.length} record{filtered.length !== 1 ? 's' : ''} found
-          </Text>
+          <Text style={styles.screenSubtitle}>Select a pet to view their diagnostic history</Text>
         </View>
 
-      </View>
+        {/* Pets List */}
+        <FlatList
+          data={pets}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            const logCount = healthLogs.filter(
+              (log) => log.petName.toLowerCase() === item.name.toLowerCase()
+            ).length;
 
-      {/* ── Summary Cards ───────────────────────────────── */}
-      <View style={styles.summaryRow}>
-        {STATUS_SUMMARY.map((item) => (
-          <View key={item.key} style={[styles.summaryCard, { backgroundColor: item.bg }]}>
-            <Ionicons name={item.icon} size={18} color={item.color} />
-            <Text style={[styles.summaryValue, { color: item.color }]}>
-              {summaryData[item.key]}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: item.color }]}>
-              {item.label}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      {/* ── Filter Tabs ─────────────────────────────────── */}
-      <FlatList
-        data={FILTER_TABS}
-        keyExtractor={(item) => item.key}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsList}
-        style={styles.tabsScroll}
-        renderItem={({ item }) => {
-          const isActive = activeFilter === item.key;
-          return (
-            <TouchableOpacity
-              style={[styles.tab, isActive && styles.activeTab]}
-              onPress={() => setActiveFilter(item.key)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, isActive && styles.activeTabText]}>
-                {item.label}
+            return (
+              <TouchableOpacity
+                style={styles.petSelectCard}
+                activeOpacity={0.7}
+                onPress={() => handleSelectPet(item)}
+              >
+                <Text style={styles.petSelectEmoji}>{item.emoji || '🐾'}</Text>
+                <View style={styles.petSelectInfo}>
+                  <Text style={styles.petSelectName}>{item.name}</Text>
+                  <Text style={styles.petSelectBreed}>
+                    {item.species.charAt(0).toUpperCase() + item.species.slice(1)} • {item.breed}
+                  </Text>
+                  <Text style={styles.petSelectRecordsCount}>
+                    📋 {logCount} record{logCount !== 1 ? 's' : ''} on file
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward-outline"
+                  size={20}
+                  color={Colors.textMuted}
+                  style={styles.petSelectChevron}
+                />
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="paw-outline" size={64} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>No Pets Registered</Text>
+              <Text style={styles.emptySubtitle}>
+                Add your pet in the Pets tab first to view their health records
               </Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => navigation.navigate('Pets')}
+              >
+                <Text style={styles.actionBtnText}>Go to My Pets</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      </View>
+    );
+  }
 
-      {/* ── Records List ────────────────────────────────── */}
+  // View 2: Chronological Scan History with Disease Filters
+  return (
+    <View style={styles.safe}>
+      {/* Header with Back Button */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity
+          onPress={() => setSelectedPet(null)}
+          style={styles.backBtn}
+          activeOpacity={0.6}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <Text style={styles.detailScreenTitle}>{selectedPet.name}'s History</Text>
+          <Text style={styles.detailScreenSubtitle}>
+            {filteredLogs.length} record{filteredLogs.length !== 1 ? 's' : ''} found
+          </Text>
+        </View>
+      </View>
+
+      {/* Disease Filter Tabs (Only shown if pet has records) */}
+      {petLogs.length > 0 && (
+        <View style={styles.filterWrapper}>
+          <Text style={styles.filterLabel}>Filter by Disease Type:</Text>
+          <FlatList
+            data={uniqueDiseases}
+            keyExtractor={(item) => item}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsList}
+            style={styles.tabsScroll}
+            renderItem={({ item }) => {
+              const isActive = activeDiseaseFilter === item;
+              return (
+                <TouchableOpacity
+                  style={[styles.tab, isActive && styles.activeTab]}
+                  onPress={() => setActiveDiseaseFilter(item)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tabText, isActive && styles.activeTabText]}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+      )}
+
+      {/* History Cards List (Chronological order) */}
       <FlatList
-        data={filtered}
+        data={filteredLogs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <HealthLogCard log={item} />}
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item }) => <HealthLogCard log={item} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="document-text-outline" size={56} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No records found</Text>
+            <Ionicons name="medical-outline" size={64} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>No Records Found</Text>
             <Text style={styles.emptySubtitle}>
-              No health records match the selected filter
+              No diagnostics logs match the selected disease filter
             </Text>
             <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={() => setActiveFilter('all')}
+              style={styles.actionBtn}
+              onPress={() => setActiveDiseaseFilter('All')}
             >
-              <Text style={styles.resetBtnText}>Show All Records</Text>
+              <Text style={styles.actionBtnText}>Show All Records</Text>
             </TouchableOpacity>
           </View>
         }
@@ -140,53 +211,107 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-
-  // Header
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xl + 20,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.md,
   },
   screenTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: Colors.textPrimary,
   },
   screenSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 4,
+  },
+
+  // Detail Header
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.xl + 20,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  backBtn: {
+    padding: Spacing.xs,
+    marginRight: Spacing.sm,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  detailScreenTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  detailScreenSubtitle: {
     fontSize: 13,
     color: Colors.textSecondary,
     marginTop: 2,
   },
 
-
-  // Summary
-  summaryRow: {
+  // Pet selection card
+  petSelectCard: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  summaryCard: {
-    flex: 1,
     alignItems: 'center',
+    padding: Spacing.md,
+    backgroundColor: Colors.card,
     borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm,
-    gap: 3,
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    ...Shadows.sm,
   },
-  summaryValue: {
+  petSelectEmoji: {
+    fontSize: 36,
+    marginRight: Spacing.md,
+  },
+  petSelectInfo: {
+    flex: 1,
+  },
+  petSelectName: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
-  summaryLabel: {
-    fontSize: 10,
+  petSelectBreed: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  petSelectRecordsCount: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 6,
     fontWeight: '600',
-    textAlign: 'center',
+  },
+  petSelectChevron: {
+    marginLeft: Spacing.sm,
   },
 
-  // Filter tabs
+  // Disease Filter Tabs
+  filterWrapper: {
+    paddingTop: Spacing.sm,
+    backgroundColor: Colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  filterLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: Spacing.md,
+    marginBottom: 4,
+  },
   tabsScroll: {
     flexGrow: 0,
     marginBottom: Spacing.sm,
@@ -222,39 +347,44 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
 
-  // List
+  // List layout
   listContent: {
-    paddingTop: 4,
-    paddingBottom: 30,
+    paddingVertical: Spacing.md,
+    paddingBottom: 40,
   },
 
   // Empty state
   emptyState: {
     alignItems: 'center',
-    paddingTop: 50,
-    gap: 8,
+    justifyContent: 'center',
+    paddingTop: 80,
     paddingHorizontal: Spacing.xl,
+    gap: Spacing.xs,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.textSecondary,
+    marginTop: Spacing.sm,
   },
   emptySubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textMuted,
     textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: Spacing.sm,
   },
-  resetBtn: {
-    marginTop: 8,
-    backgroundColor: Colors.primaryBg,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 10,
+  actionBtn: {
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 12,
     borderRadius: BorderRadius.full,
+    ...Shadows.sm,
   },
-  resetBtnText: {
-    color: Colors.primary,
-    fontSize: 13,
+  actionBtnText: {
+    color: Colors.textInverse,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

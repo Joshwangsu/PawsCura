@@ -9,10 +9,12 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { auth } from '../../services/firebaseConfig';
 import { useAuth } from '../../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
@@ -60,10 +62,18 @@ export default function SignupScreen({ navigation }) {
         await updateProfile(userCredential.user, {
           displayName: form.name
         });
-        if (reloadUser) await reloadUser();
       }
-      
-      // Navigation is handled automatically by AppNavigator reacting to AuthContext
+
+      // Immediately sign them out so they aren't auto-logged in
+      await signOut(auth);
+
+      Alert.alert(
+        "Registration Successful",
+        "Your account has been created successfully! Please log in with your credentials.",
+        [
+          { text: "OK", onPress: () => navigation.navigate("Login") }
+        ]
+      );
     } catch (error) {
       let errorMsg = 'Failed to create account. Please try again.';
       if (error.code === 'auth/email-already-in-use') {

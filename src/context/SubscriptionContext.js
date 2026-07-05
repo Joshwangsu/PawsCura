@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../services/firebaseConfig';
+import { signOut } from 'firebase/auth';
+import { db, auth } from '../services/firebaseConfig';
 import { useAuth } from './AuthContext';
 
 const SubscriptionContext = createContext();
@@ -22,12 +23,36 @@ export const SubscriptionProvider = ({ children }) => {
     }
 
     const userDocRef = doc(db, 'users', user.uid);
+    const isTestEmail = user.email && user.email.toLowerCase() === 'test@gmail.com';
 
     const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
-        setIsPremium(!!data.isPremium);
         
+        // Log out immediately if suspended
+        if (data.isSuspended) {
+          signOut(auth).catch(err => console.log(err));
+          alert("Your account has been suspended by an administrator.");
+          return;
+        }
+
+        // Auto-upgrade test@gmail.com in Firestore if not already premium
+        if (isTestEmail && !data.isPremium) {
+          updateDoc(userDocRef, { isPremium: true }).catch(err => 
+            console.log(`Error upgrading test account: ${err}`)
+          );
+        }
+
+        setIsPremium(!!data.isPremium || isTestEmail);
+        
+        // Sync username/email to firestore for new NoSQL schema fields if missing
+        if (!data.username || !data.email) {
+          updateDoc(userDocRef, {
+            username: data.username || user.displayName || user.email.split('@')[0],
+            email: data.email || user.email
+          }).catch(err => console.log(`Error updating user details: ${err}`));
+        }
+
         // Check if daily scan count needs reset
         const todayStr = new Date().toISOString().split('T')[0];
         if (data.scanUsageDate !== todayStr) {
@@ -47,7 +72,9 @@ export const SubscriptionProvider = ({ children }) => {
         // Initialize user document for first time
         const todayStr = new Date().toISOString().split('T')[0];
         setDoc(userDocRef, {
-          isPremium: false,
+          username: user.displayName || user.email.split('@')[0],
+          email: user.email,
+          isPremium: isTestEmail ? true : false,
           scanUsageCount: 0,
           scanUsageDate: todayStr
         });

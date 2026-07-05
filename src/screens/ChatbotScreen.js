@@ -18,7 +18,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { chatWithVet } from '../services/gemini';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 
 export default function ChatbotScreen({ route, navigation }) {
@@ -34,55 +34,83 @@ export default function ChatbotScreen({ route, navigation }) {
 
   const userMessageCount = messages.filter(m => m.role === 'user').length;
 
-  // Load History
+  // Real-time listener for chat messages subcollection (Premium only)
   useEffect(() => {
-    const loadHistory = async () => {
-      if (!user) return;
-      try {
-        const chatDocRef = doc(db, 'chats', user.uid);
-        const docSnap = await getDoc(chatDocRef);
-        
-        let loadedMessages = [{
-          id: '1',
+    if (!user) return;
+
+    if (!isPremium) {
+      // Free users: load standard greeting locally
+      setMessages([{
+        id: '1',
+        role: 'assistant',
+        text: 'Hello! I am your AI Virtual Vet Assistant. I am here to help answer questions about your pet\'s health, behavior, and care. How can I assist you today?'
+      }]);
+      setIsLoaded(true);
+      return;
+    }
+
+    // Ensure parent chat document exists
+    const chatDocRef = doc(db, 'chats', user.uid);
+    setDoc(chatDocRef, {
+      id: user.uid,
+      userId: user.uid,
+      updatedAt: serverTimestamp()
+    }, { merge: true }).catch(err => console.log("Failed to ensure chat doc", err));
+
+    const q = query(collection(db, 'chats', user.uid, 'messages'), orderBy('timestamp', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let loadedMessages = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        loadedMessages.push({
+          id: docSnap.id,
+          ...data
+        });
+      });
+
+      // If absolutely no messages, seed default greeting
+      if (loadedMessages.length === 0) {
+        const defaultMsg = {
           role: 'assistant',
-          text: 'Hello! I am your AI Virtual Vet Assistant. I am here to help answer questions about your pet\'s health, behavior, and care. How can I assist you today?'
-        }];
-
-        if (docSnap.exists() && docSnap.data().messages?.length > 0) {
-          loadedMessages = docSnap.data().messages;
-        }
-
-        // Append initialContext if we navigated from scan
-        if (initialContext) {
-          loadedMessages.push({
-            id: Date.now().toString(),
-            role: 'assistant',
-            text: `I see you just ran a scan that suspected: **${initialContext.suspectedCondition}**.\n\nMy observations were: ${initialContext.analysis}\n\nDo you have any specific questions about this assessment or how to care for your pet?`
-          });
-          // Clear param so it doesn't run again on re-renders
-          navigation.setParams({ initialContext: null });
-        }
-
+          text: 'Hello! I am your AI Virtual Vet Assistant. I am here to help answer questions about your pet\'s health, behavior, and care. How can I assist you today?',
+          timestamp: serverTimestamp()
+        };
+        addDoc(collection(db, 'chats', user.uid, 'messages'), defaultMsg).catch(err => console.log(err));
+      } else {
         setMessages(loadedMessages);
         setIsLoaded(true);
-      } catch (error) {
-        console.error("Error loading chat:", error);
-        setIsLoaded(true);
       }
-    };
-    loadHistory();
-  }, [user, initialContext]);
+    }, (error) => {
+      console.error("Error loading chat messages subcollection:", error);
+      setIsLoaded(true);
+    });
 
-  // Sync to Firestore on messages change
+    return () => unsubscribe();
+  }, [user, isPremium]);
+
+  // Handle initial scan context once messages are loaded
   useEffect(() => {
-    if (isLoaded && user && messages.length > 0) {
-      const chatDocRef = doc(db, 'chats', user.uid);
-      setDoc(chatDocRef, {
-        messages: messages,
-        updatedAt: serverTimestamp()
-      }, { merge: true }).catch(err => console.log("Failed to sync chat", err));
+    if (isLoaded && initialContext && user) {
+      const text = `I see you just ran a scan that suspected: **${initialContext.suspectedCondition}**.\n\nMy observations were: ${initialContext.analysis}\n\nDo you have any specific questions about this assessment or how to care for your pet?`;
+      
+      if (isPremium) {
+        const initMsg = {
+          role: 'assistant',
+          text: text,
+          timestamp: serverTimestamp()
+        };
+        addDoc(collection(db, 'chats', user.uid, 'messages'), initMsg).catch(err => console.log(err));
+      } else {
+        // Free users: save locally
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          text: text
+        }]);
+      }
+      navigation.setParams({ initialContext: null });
     }
-  }, [messages, isLoaded, user]);
+  }, [isLoaded, initialContext, user, isPremium]);
 
   useEffect(() => {
     // Auto scroll to bottom when new messages arrive
@@ -98,30 +126,67 @@ export default function ChatbotScreen({ route, navigation }) {
     setInputText('');
     Keyboard.dismiss();
 
-    const newUserMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: userText
-    };
-
-    setMessages(prev => [...prev, newUserMessage]);
     setIsTyping(true);
 
+    if (!isPremium) {
+      // Free users: handle chat history in-memory only (do not write to Firestore)
+      const newUserMsg = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: userText
+      };
+      setMessages(prev => [...prev, newUserMsg]);
+
+      try {
+        const history = [...messages, newUserMsg].map(m => ({ role: m.role, text: m.text }));
+        const aiResponseText = await chatWithVet(history);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          text: aiResponseText
+        }]);
+      } catch (error) {
+        console.error("Chat error (Free):", error);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          text: 'I am sorry, I am having trouble connecting right now. Please try again in a moment.'
+        }]);
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
+
+    // Premium users: write user and AI messages to Firestore subcollection
     try {
-      // Send the entire conversation history context to Gemini
-      const aiResponseText = await chatWithVet([...messages, newUserMessage]);
-      
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+      await addDoc(collection(db, 'chats', user.uid, 'messages'), {
+        role: 'user',
+        text: userText,
+        timestamp: serverTimestamp()
+      });
+
+      const chatDocRef = doc(db, 'chats', user.uid);
+      await setDoc(chatDocRef, { updatedAt: serverTimestamp() }, { merge: true });
+
+      const history = messages.map(m => ({ role: m.role, text: m.text }));
+      history.push({ role: 'user', text: userText });
+      const aiResponseText = await chatWithVet(history);
+
+      await addDoc(collection(db, 'chats', user.uid, 'messages'), {
         role: 'assistant',
-        text: aiResponseText
-      }]);
+        text: aiResponseText,
+        timestamp: serverTimestamp()
+      });
+
+      await setDoc(chatDocRef, { updatedAt: serverTimestamp() }, { merge: true });
     } catch (error) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+      console.error("Failed to send/receive chat message (Premium):", error);
+      await addDoc(collection(db, 'chats', user.uid, 'messages'), {
         role: 'assistant',
-        text: 'I am sorry, I am having trouble connecting to my database right now. Please try again in a moment.'
-      }]);
+        text: 'I am sorry, I am having trouble connecting right now. Please try again in a moment.',
+        timestamp: serverTimestamp()
+      });
     } finally {
       setIsTyping(false);
     }
@@ -182,7 +247,6 @@ export default function ChatbotScreen({ route, navigation }) {
           </View>
           <View>
             <Text style={styles.headerTitle}>AI Vet Assistant</Text>
-            <Text style={styles.headerSub}>Powered by Gemini</Text>
           </View>
         </View>
       </LinearGradient>

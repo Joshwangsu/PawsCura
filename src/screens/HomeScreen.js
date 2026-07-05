@@ -16,12 +16,14 @@ import PetCard from '../components/PetCard';
 import HealthLogCard from '../components/HealthLogCard';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 
 export default function HomeScreen({ navigation }) {
   const { pets, healthLogs } = useHealth();
   const { user } = useAuth();
+  const { isPremium } = useSubscription();
   
   const [selectedPet, setSelectedPet] = useState(pets.length > 0 ? pets[0].id : null);
   const recentLogs = healthLogs.slice(0, 2);
@@ -68,8 +70,12 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             <View style={styles.headerRight}>
-              {/* Avatar / Logout */}
-              <TouchableOpacity style={styles.avatar} onPress={() => setShowLogoutModal(true)} activeOpacity={0.7}>
+              {/* Avatar / Settings tab shortcut */}
+              <TouchableOpacity 
+                style={styles.avatar} 
+                onPress={() => navigation.navigate('Settings')} 
+                activeOpacity={0.7}
+              >
                 <Text style={styles.avatarText}>
                   {initial}
                 </Text>
@@ -78,6 +84,48 @@ export default function HomeScreen({ navigation }) {
           </View>
 
         </LinearGradient>
+
+        {/* ── Premium Subscription Banner ───────────────── */}
+        <View style={styles.premiumBannerContainer}>
+          {isPremium ? (
+            <LinearGradient
+              colors={['#1E3F66', Colors.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.premiumBanner}
+            >
+              <View style={styles.premiumBannerLeft}>
+                <Ionicons name="sparkles" size={20} color="#F59E0B" />
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={styles.premiumTitle}>PawsCura Premium Active</Text>
+                  <Text style={styles.premiumSubtitle}>You have unlimited scans, logs, and pets.</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('Paywall')}
+              style={[styles.premiumBanner, styles.premiumBannerFree]}
+            >
+              <LinearGradient
+                colors={['#F59E0B', '#D97706']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.premiumGradient}
+              >
+                <View style={styles.premiumBannerLeft}>
+                  <Ionicons name="star" size={22} color="#fff" />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
+                    <Text style={styles.premiumSubtitle}>Get unlimited scans, save multiple pets & logs!</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </View>
 
 
         {/* ── My Pets ───────────────────────────────────── */}
@@ -187,6 +235,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+
     </View>
   );
 }
@@ -451,6 +501,46 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.textInverse,
+  },
+  premiumBannerContainer: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    ...Shadows.sm,
+  },
+  premiumBanner: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  premiumBannerFree: {
+    padding: 0, // Since the gradient handles padding
+  },
+  premiumGradient: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  premiumBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  premiumTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  premiumSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+    lineHeight: 16,
   },
 
 });

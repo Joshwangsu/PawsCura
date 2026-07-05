@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import HealthLogCard from '../components/HealthLogCard';
 
 const SPECIES_OPTIONS = [
   { label: 'Dog', emoji: '🐶', value: 'dog' },
@@ -44,67 +45,7 @@ const EMPTY_FORM = {
   notes: '',
 };
 
-function PetDetailModal({ pet, onClose, onDelete }) {
-  return (
-    <Modal visible={!!pet} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.detailModal}>
-          {/* Header */}
-          <LinearGradient
-            colors={[pet?.accentColor || Colors.primary, pet?.color || Colors.primaryLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.detailHeader}
-          >
-            <TouchableOpacity style={styles.detailCloseBtn} onPress={onClose}>
-              <Ionicons name="close" size={22} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.detailEmoji}>{pet?.emoji}</Text>
-            <Text style={styles.detailName}>{pet?.name}</Text>
-            <Text style={styles.detailBreed}>{pet?.breed}</Text>
-          </LinearGradient>
-
-          <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
-            {/* Info grid */}
-            <View style={styles.detailGrid}>
-              {[
-                { label: 'Species', value: pet?.species, icon: 'paw' },
-                { label: 'Age', value: pet?.age, icon: 'calendar' },
-                { label: 'Weight', value: pet?.weight, icon: 'barbell' },
-                { label: 'Gender', value: pet?.gender || '—', icon: 'male-female' },
-                { label: 'Birthday', value: pet?.birthday || '—', icon: 'gift' },
-              ].map((info) => (
-                <View key={info.label} style={styles.detailInfoCard}>
-                  <Ionicons name={info.icon} size={18} color={pet?.accentColor || Colors.primary} />
-                  <Text style={styles.detailInfoLabel}>{info.label}</Text>
-                  <Text style={styles.detailInfoValue}>{info.value}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Notes */}
-            {pet?.notes ? (
-              <View style={styles.detailNotesCard}>
-                <Text style={styles.detailNotesLabel}>Notes</Text>
-                <Text style={styles.detailNotesText}>{pet.notes}</Text>
-              </View>
-            ) : null}
-
-            {/* Delete button */}
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => onDelete(pet?.id)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="trash-outline" size={18} color="#EF4444" />
-              <Text style={styles.deleteBtnText}>Remove Pet</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
+// PetDetailModal removed. Profile and diagnostic history details are now displayed inline using dropdown selectors.
 
 function AddPetModal({ visible, onClose, onAdd }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -350,12 +291,282 @@ function AddPetModal({ visible, onClose, onAdd }) {
   );
 }
 
+function EditPetModal({ visible, pet, onClose, onEdit }) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedSpecies, setSelectedSpecies] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(0);
+  const [step, setStep] = useState(1);
+
+  React.useEffect(() => {
+    if (pet) {
+      setForm({
+        name: pet.name || '',
+        species: pet.species || '',
+        breed: pet.breed || '',
+        age: pet.age !== undefined ? pet.age.toString() : '',
+        weight: pet.weight !== undefined ? pet.weight.toString() : '',
+        gender: pet.gender || '',
+        birthday: pet.birthday || '',
+        notes: pet.notes || '',
+      });
+      const sp = SPECIES_OPTIONS.find(o => o.value === pet.species) || SPECIES_OPTIONS[0];
+      setSelectedSpecies(sp);
+      const colorIndex = PET_ACCENT_COLORS.findIndex(o => o.bg === pet.color || o.accent === pet.accentColor);
+      setSelectedColor(colorIndex >= 0 ? colorIndex : 0);
+      setStep(1);
+    }
+  }, [pet, visible]);
+
+  const updateField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const handleSpeciesSelect = (sp) => {
+    setSelectedSpecies(sp);
+    updateField('species', sp.value);
+  };
+
+  const handleSubmit = () => {
+    if (!form.name.trim() || !selectedSpecies) {
+      Alert.alert('Missing Info', 'Please enter your pet\'s name and select a species.');
+      return;
+    }
+    const colorPair = PET_ACCENT_COLORS[selectedColor];
+    onEdit(pet.id, {
+      name: form.name.trim(),
+      species: form.species,
+      breed: form.breed || `${selectedSpecies.label}`,
+      age: form.age || '0',
+      weight: form.weight || '0',
+      gender: form.gender || 'Unknown',
+      birthday: form.birthday || '',
+      notes: form.notes || '',
+      emoji: selectedSpecies.emoji,
+      color: colorPair.bg,
+      accentColor: colorPair.accent,
+    });
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <View style={styles.addModal}>
+          {/* Modal header */}
+          <View style={styles.addModalHeader}>
+            <Text style={styles.addModalTitle}>
+              {step === 1 ? 'Edit Pet Profile' : 'More Details'}
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Step indicator */}
+          <View style={styles.stepRow}>
+            <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]} />
+            <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
+            <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]} />
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
+            {step === 1 ? (
+              <>
+                {/* Pet Name */}
+                <Text style={styles.fieldLabel}>Pet Name *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Buddy"
+                  placeholderTextColor={Colors.textSecondary}
+                  value={form.name}
+                  onChangeText={(v) => updateField('name', v)}
+                />
+
+                {/* Species */}
+                <Text style={styles.fieldLabel}>Species *</Text>
+                <View style={styles.speciesGrid}>
+                  {SPECIES_OPTIONS.map((sp) => (
+                    <TouchableOpacity
+                      key={sp.value}
+                      style={[
+                        styles.speciesBtn,
+                        selectedSpecies?.value === sp.value && styles.speciesBtnActive,
+                      ]}
+                      onPress={() => handleSpeciesSelect(sp)}
+                    >
+                      <Text style={styles.speciesEmoji}>{sp.emoji}</Text>
+                      <Text
+                        style={[
+                          styles.speciesLabel,
+                          selectedSpecies?.value === sp.value && styles.speciesLabelActive,
+                        ]}
+                      >
+                        {sp.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Color theme */}
+                <Text style={styles.fieldLabel}>Card Color</Text>
+                <View style={styles.colorRow}>
+                  {PET_ACCENT_COLORS.map((color, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.colorDot,
+                        { backgroundColor: color.accent },
+                        selectedColor === idx && styles.colorDotSelected,
+                      ]}
+                      onPress={() => setSelectedColor(idx)}
+                    />
+                  ))}
+                </View>
+
+              </>
+            ) : (
+              <>
+                {/* Breed */}
+                <Text style={styles.fieldLabel}>Breed</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Golden Retriever"
+                  placeholderTextColor={Colors.textSecondary}
+                  value={form.breed}
+                  onChangeText={(v) => updateField('breed', v)}
+                />
+
+                {/* Age & Weight Row */}
+                <View style={styles.formRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>Age (years)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. 3"
+                      placeholderTextColor={Colors.textSecondary}
+                      keyboardType="numeric"
+                      value={form.age}
+                      onChangeText={(v) => updateField('age', v)}
+                    />
+                  </View>
+                  <View style={{ width: Spacing.md }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>Weight (kg)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. 12.5"
+                      placeholderTextColor={Colors.textSecondary}
+                      keyboardType="numeric"
+                      value={form.weight}
+                      onChangeText={(v) => updateField('weight', v)}
+                    />
+                  </View>
+                </View>
+
+                {/* Gender */}
+                <Text style={styles.fieldLabel}>Gender</Text>
+                <View style={styles.genderRow}>
+                  {['Male', 'Female'].map((g) => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[
+                        styles.genderBtn,
+                        form.gender === g && styles.genderBtnActive,
+                      ]}
+                      onPress={() => updateField('gender', g)}
+                    >
+                      <Text
+                        style={[
+                          styles.genderText,
+                          form.gender === g && styles.genderTextActive,
+                        ]}
+                      >
+                        {g}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Birthday */}
+                <Text style={styles.fieldLabel}>Birthday</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. 12 Oct 2020"
+                  placeholderTextColor={Colors.textSecondary}
+                  value={form.birthday}
+                  onChangeText={(v) => updateField('birthday', v)}
+                />
+
+                {/* Notes */}
+                <Text style={styles.fieldLabel}>Notes / Conditions</Text>
+                <TextInput
+                  style={[styles.textInput, styles.notesInput]}
+                  placeholder="e.g. Allergies to chicken, very active..."
+                  placeholderTextColor={Colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  value={form.notes}
+                  onChangeText={(v) => updateField('notes', v)}
+                />
+
+              </>
+            )}
+          </ScrollView>
+
+          {/* Action footer */}
+          <View style={styles.addModalFooter}>
+            {step === 2 && (
+              <TouchableOpacity
+                style={styles.backBtn}
+                onPress={() => setStep(1)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.backBtnText}>Back</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.nextBtn}
+              onPress={step === 1 ? () => setStep(2) : handleSubmit}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={[Colors.primary, '#1E3F66']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.nextBtnGradient}
+              >
+                <Text style={styles.nextBtnText}>
+                  {step === 1 ? 'Next →' : 'Save Details'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export default function PetsScreen() {
-  const { pets, addPet, deletePet } = useHealth();
+  const { pets, addPet, deletePet, updatePet, healthLogs } = useHealth();
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
   const [selectedPet, setSelectedPet] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [petToEdit, setPetToEdit] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const activePet = selectedPet || (pets.length > 0 ? pets[0] : null);
+
+  const handleEditPet = async (id, updatedFields) => {
+    try {
+      await updatePet(id, updatedFields);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleAddPet = (newPet) => {
     addPet(newPet);
@@ -414,7 +625,7 @@ export default function PetsScreen() {
         </View>
       </LinearGradient>
 
-      {/* Pet list */}
+      {/* Pet Dashboard Content */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.listContent}
@@ -437,70 +648,209 @@ export default function PetsScreen() {
           </View>
         ) : (
           <>
-            {pets.map((pet) => (
-              <TouchableOpacity
-                key={pet.id}
-                style={styles.petCard}
-                onPress={() => setSelectedPet(pet)}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.petCardLeft, { backgroundColor: pet.color }]}>
-                  <Text style={styles.petCardEmoji}>{pet.emoji}</Text>
-                </View>
-                <View style={styles.petCardInfo}>
-                  <Text style={styles.petCardName}>{pet.name}</Text>
-                  <Text style={styles.petCardBreed}>{pet.breed}</Text>
-                  <View style={styles.petCardTags}>
-                    <View style={[styles.petTag, { backgroundColor: pet.color }]}>
-                      <Text style={[styles.petTagText, { color: pet.accentColor }]}>
-                        {pet.age}
-                      </Text>
-                    </View>
-                    <View style={[styles.petTag, { backgroundColor: pet.color }]}>
-                      <Text style={[styles.petTagText, { color: pet.accentColor }]}>
-                        {pet.weight}
-                      </Text>
-                    </View>
-                    {pet.gender && pet.gender !== 'Unknown' && (
-                      <View style={[styles.petTag, { backgroundColor: pet.color }]}>
-                        <Text style={[styles.petTagText, { color: pet.accentColor }]}>
-                          {pet.gender}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            ))}
-
-            {/* Add another */}
+            {/* Custom Dropdown Selector */}
             <TouchableOpacity
-              style={styles.addAnotherBtn}
-              onPress={() => setShowAddModal(true)}
+              style={styles.dropdownBtn}
+              onPress={() => setShowDropdown(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
-              <Text style={styles.addAnotherText}>Add Another Pet</Text>
+              <View style={styles.dropdownLeft}>
+                <View style={[styles.dropdownEmojiCircle, { backgroundColor: activePet?.color || Colors.primaryLight }]}>
+                  <Text style={styles.dropdownEmoji}>{activePet?.emoji || '🐾'}</Text>
+                </View>
+                <View>
+                  <Text style={styles.dropdownLabel}>Active Pet Profile</Text>
+                  <Text style={styles.dropdownValue}>{activePet?.name} ({activePet?.breed})</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={Colors.primary} />
             </TouchableOpacity>
+
+            {/* Pet Profile Details Dashboard Card */}
+            <View style={styles.dashboardCard}>
+              <LinearGradient
+                colors={[activePet?.accentColor || Colors.primary, activePet?.color || Colors.primaryLight]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.dashboardHeader}
+              >
+                <View style={styles.dashboardHeaderInner}>
+                  <Text style={styles.dashboardEmoji}>{activePet?.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.dashboardName}>{activePet?.name}</Text>
+                    <Text style={styles.dashboardBreed}>{activePet?.breed}</Text>
+                  </View>
+                  
+                  {/* Action buttons (Edit & Delete) */}
+                  <View style={styles.dashboardHeaderActions}>
+                    <TouchableOpacity
+                      style={styles.headerActionBtn}
+                      onPress={() => {
+                        setPetToEdit(activePet);
+                        setShowEditModal(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="create-outline" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.headerActionBtn}
+                      onPress={() => handleDeletePet(activePet?.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </LinearGradient>
+
+              <View style={styles.dashboardBody}>
+                {/* Details grid */}
+                <View style={styles.detailGrid}>
+                  {[
+                    { label: 'Species', value: activePet?.species, icon: 'paw' },
+                    { label: 'Age', value: activePet?.age !== undefined ? `${activePet.age} yrs` : 'Unknown', icon: 'calendar' },
+                    { label: 'Weight', value: activePet?.weight !== undefined ? `${activePet.weight} kg` : 'Unknown', icon: 'barbell' },
+                    { label: 'Gender', value: activePet?.gender || '—', icon: 'male-female' },
+                    { label: 'Birthday', value: activePet?.birthday || '—', icon: 'gift' },
+                  ].map((info) => (
+                    <View key={info.label} style={styles.detailInfoCard}>
+                      <Ionicons name={info.icon} size={16} color={activePet?.accentColor || Colors.primary} />
+                      <Text style={styles.detailInfoLabel}>{info.label}</Text>
+                      <Text style={styles.detailInfoValue}>{info.value}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Notes */}
+                {activePet?.notes ? (
+                  <View style={styles.detailNotesCard}>
+                    <Text style={styles.detailNotesLabel}>Notes & Conditions</Text>
+                    <Text style={styles.detailNotesText}>{activePet.notes}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Health Records Section (Directly below pet card) */}
+            <View style={styles.historySection}>
+              <View style={styles.historyHeader}>
+                <Ionicons name="medical-outline" size={20} color={Colors.primary} />
+                <Text style={styles.historySectionLabel}>Medical Scan History</Text>
+                <View style={styles.historyBadge}>
+                  <Text style={styles.historyBadgeText}>
+                    {healthLogs.filter(log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase()).length} records
+                  </Text>
+                </View>
+              </View>
+
+              {healthLogs.filter(log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase()).length === 0 ? (
+                <View style={styles.emptyLogsCard}>
+                  <Ionicons name="document-text-outline" size={32} color={Colors.textMuted} />
+                  <Text style={styles.emptyLogsText}>No diagnostics records on file for {activePet?.name}.</Text>
+                  <TouchableOpacity
+                    style={styles.emptyLogsScanBtn}
+                    onPress={() => navigation.navigate('Scan')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.emptyLogsScanBtnText}>Run AI Diagnostic Scan</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                healthLogs
+                  .filter(log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase())
+                  .map((log) => (
+                    <View key={log.id} style={{ marginBottom: Spacing.sm }}>
+                      <HealthLogCard log={log} />
+                    </View>
+                  ))
+              )}
+            </View>
           </>
         )}
       </ScrollView>
 
-      {/* Detail modal */}
-      {selectedPet && (
-        <PetDetailModal
-          pet={selectedPet}
-          onClose={() => setSelectedPet(null)}
-          onDelete={handleDeletePet}
-        />
-      )}
+      {/* Dropdown Modal List */}
+      <Modal visible={showDropdown} animationType="slide" transparent>
+        <TouchableOpacity 
+          style={styles.dropdownOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowDropdown(false)}
+        >
+          <View style={styles.dropdownSheet}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>Select Pet Profile</Text>
+              <TouchableOpacity onPress={() => setShowDropdown(false)}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.dropdownScroll} showsVerticalScrollIndicator={false}>
+              {pets.map((pet) => {
+                const isActive = pet.id === activePet?.id;
+                return (
+                  <TouchableOpacity
+                    key={pet.id}
+                    style={[styles.dropdownItem, isActive && styles.dropdownItemActive]}
+                    onPress={() => {
+                      setSelectedPet(pet);
+                      setShowDropdown(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.dropdownItemLeft}>
+                      <View style={[styles.itemEmojiCircle, { backgroundColor: pet.color }]}>
+                        <Text style={styles.itemEmoji}>{pet.emoji}</Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.itemName, isActive && styles.itemNameActive]}>{pet.name}</Text>
+                        <Text style={styles.itemBreed}>{pet.breed}</Text>
+                      </View>
+                    </View>
+                    {isActive && <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+
+              <TouchableOpacity
+                style={styles.dropdownAddBtn}
+                onPress={() => {
+                  setShowDropdown(false);
+                  if (!isPremium && pets.length >= 1) {
+                    navigation.navigate('Paywall');
+                  } else {
+                    setShowAddModal(true);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={20} color={Colors.primary} />
+                <Text style={styles.dropdownAddBtnText}>Add Another Pet Profile</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Add pet modal */}
       <AddPetModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onAdd={handleAddPet}
+      />
+
+      {/* Edit pet modal */}
+      <EditPetModal
+        visible={showEditModal}
+        pet={petToEdit}
+        onClose={() => {
+          setShowEditModal(false);
+          setPetToEdit(null);
+        }}
+        onEdit={(id, fields) => {
+          handleEditPet(id, fields);
+          setSelectedPet(prev => prev ? { ...prev, ...fields } : (pets.find(p => p.id === id) ? { ...pets.find(p => p.id === id), ...fields } : null));
+        }}
       />
     </View>
   );
@@ -546,159 +896,209 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.4)',
   },
 
-  // Pet card
-  petCard: {
+  // Custom Dropdown Selector styles
+  dropdownBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
     borderRadius: BorderRadius.lg,
+    padding: 12,
     marginBottom: Spacing.md,
-    padding: Spacing.md,
-    ...Shadows.md,
+    ...Shadows.sm,
   },
-  petCardLeft: {
-    width: 64,
-    height: 64,
-    borderRadius: BorderRadius.md,
-    justifyContent: 'center',
+  dropdownLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: Spacing.md,
+    gap: 10,
   },
-  petCardEmoji: { fontSize: 32 },
-  petCardInfo: { flex: 1 },
-  petCardName: {
-    fontSize: 17,
+  dropdownEmojiCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+  dropdownEmoji: {
+    fontSize: 20,
+  },
+  dropdownLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  dropdownValue: {
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.textPrimary,
-    marginBottom: 2,
+    marginTop: 1,
   },
-  petCardBreed: {
-    fontSize: 13,
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  dropdownSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 30,
+    maxHeight: '70%',
+    ...Shadows.lg,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.lg,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  dropdownScroll: {
+    padding: Spacing.md,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.background,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  dropdownItemActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#EBF2FB',
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  itemEmojiCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemEmoji: {
+    fontSize: 20,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  itemNameActive: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  itemBreed: {
+    fontSize: 12,
     color: Colors.textSecondary,
-    marginBottom: 6,
+    marginTop: 1,
   },
-  petCardTags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  petTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-  },
-  petTagText: { fontSize: 11, fontWeight: '600' },
-
-  // Add another
-  addAnotherBtn: {
+  dropdownAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
     borderWidth: 1.5,
     borderColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     borderStyle: 'dashed',
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
+    marginBottom: 20,
   },
-  addAnotherText: {
-    fontSize: 15,
-    fontWeight: '700',
+  dropdownAddBtnText: {
     color: Colors.primary,
-  },
-
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  emptyEmoji: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  emptySub: {
+    fontWeight: '700',
     fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    marginBottom: 24,
   },
-  emptyAddBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: BorderRadius.full,
-  },
-  emptyAddBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-
-  // --- Modals ---
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-
-  // Detail Modal
-  detailModal: {
+  // Dashboard Card layout styles
+  dashboardCard: {
     backgroundColor: Colors.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: '90%',
+    borderRadius: BorderRadius.xl,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.md,
+    marginBottom: Spacing.lg,
   },
-  detailHeader: {
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xl,
+  dashboardHeader: {
+    padding: Spacing.md,
+  },
+  dashboardHeaderInner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
+    gap: 12,
   },
-  detailCloseBtn: {
-    position: 'absolute',
-    top: Spacing.md,
-    right: Spacing.md,
+  dashboardEmoji: {
+    fontSize: 36,
+  },
+  dashboardName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  dashboardBreed: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 1,
+  },
+  dashboardHeaderActions: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  headerActionBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  detailEmoji: { fontSize: 56, marginBottom: 8 },
-  detailName: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: -0.5,
+  dashboardBody: {
+    padding: Spacing.md,
   },
-  detailBreed: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-  },
-  detailBody: { padding: Spacing.lg },
   detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
+    gap: Spacing.xs,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
   },
   detailInfoCard: {
-    width: '47%',
+    width: '31%',
     backgroundColor: Colors.background,
     borderRadius: BorderRadius.md,
-    padding: Spacing.md,
+    padding: Spacing.sm,
     alignItems: 'center',
-    gap: 4,
-    ...Shadows.sm,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   detailInfoLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+    fontSize: 9,
     fontWeight: '600',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
   },
   detailInfoValue: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.textPrimary,
     textTransform: 'capitalize',
@@ -707,35 +1107,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   detailNotesLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   detailNotesText: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: '#EF4444',
-    marginBottom: 40,
-  },
-  deleteBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#EF4444',
+    lineHeight: 18,
   },
 
   // Add Modal
@@ -893,5 +1277,102 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#fff',
+  },
+  historySection: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.sm,
+  },
+  historySectionLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    textTransform: 'uppercase',
+  },
+  historyBadge: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  historyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  emptyLogsCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+  },
+  emptyLogsText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  emptyLogsScanBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: BorderRadius.md,
+    ...Shadows.sm,
+  },
+  emptyLogsScanBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  emptyEmoji: { fontSize: 64, marginBottom: 16 },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  emptySub: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    marginBottom: 24,
+  },
+  emptyAddBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.full,
+  },
+  emptyAddBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  // Footer
+  addModalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    gap: Spacing.md,
+  },
+  backBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
   },
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
@@ -91,6 +91,17 @@ export default function HealthLogCard({ log, onPress }) {
             
             <Text style={[styles.detailLabel, { marginTop: Spacing.md }]}>Observations & Analysis</Text>
             <Text style={styles.detailText}>{log.description}</Text>
+
+            {log.imageUrl && (
+              <View style={styles.scannedImageContainer}>
+                <Text style={[styles.detailLabel, { marginTop: Spacing.md, marginBottom: Spacing.xs }]}>Scanned Symptom Photo</Text>
+                <Image
+                  source={{ uri: log.imageUrl }}
+                  style={styles.scannedImage}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
 
             <TouchableOpacity 
               style={styles.chatbotLinkBtn}
@@ -265,5 +276,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 15,
+  },
+  scannedImageContainer: {
+    marginTop: Spacing.md,
+  },
+  scannedImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.xs,
   },
 });
