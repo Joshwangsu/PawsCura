@@ -1127,8 +1127,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: '92%',
-    paddingBottom: 20,
+    height: '80%',
+    paddingBottom: 24,
   },
   addModalHeader: {
     flexDirection: 'row',
@@ -1162,7 +1162,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   stepLineActive: { backgroundColor: Colors.primary },
-  addFormScroll: { paddingHorizontal: Spacing.lg },
+  addFormScroll: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+  },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '700',
