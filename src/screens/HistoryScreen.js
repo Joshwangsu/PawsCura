@@ -135,7 +135,7 @@ export default function HistoryScreen({ navigation }) {
       {/* ── Header ────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerInfo}>
-          <Text style={styles.screenTitle}>Diagnostic History</Text>
+          <Text style={styles.screenTitle}>Assessments History</Text>
           <Text style={styles.screenSubtitle}>
             Timeline of skin health assessments ({filteredLogs.length})
           </Text>
