@@ -47,7 +47,7 @@ const EMPTY_FORM = {
 
 // PetDetailModal removed. Profile and diagnostic history details are now displayed inline using dropdown selectors.
 
-function AddPetModal({ visible, onClose, onAdd }) {
+function AddPetModal({ onClose, onAdd }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
@@ -96,12 +96,11 @@ function AddPetModal({ visible, onClose, onAdd }) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
-      >
-        <View style={styles.addModal}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.fullscreenOverlay}
+    >
+      <View style={styles.addModal}>
           {/* Modal header */}
           <View style={styles.addModalHeader}>
             <Text style={styles.addModalTitle}>
@@ -287,11 +286,10 @@ function AddPetModal({ visible, onClose, onAdd }) {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
   );
 }
 
-function EditPetModal({ visible, pet, onClose, onEdit }) {
+function EditPetModal({ pet, onClose, onEdit }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
@@ -315,7 +313,7 @@ function EditPetModal({ visible, pet, onClose, onEdit }) {
       setSelectedColor(colorIndex >= 0 ? colorIndex : 0);
       setStep(1);
     }
-  }, [pet, visible]);
+  }, [pet]);
 
   const updateField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -347,12 +345,11 @@ function EditPetModal({ visible, pet, onClose, onEdit }) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
-      >
-        <View style={styles.addModal}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.fullscreenOverlay}
+    >
+      <View style={styles.addModal}>
           {/* Modal header */}
           <View style={styles.addModalHeader}>
             <Text style={styles.addModalTitle}>
@@ -544,7 +541,6 @@ function EditPetModal({ visible, pet, onClose, onEdit }) {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
   );
 }
 
@@ -832,26 +828,28 @@ export default function PetsScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Add pet modal */}
-      <AddPetModal
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={handleAddPet}
-      />
+      {/* Add pet inline overlay */}
+      {showAddModal && (
+        <AddPetModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddPet}
+        />
+      )}
 
-      {/* Edit pet modal */}
-      <EditPetModal
-        visible={showEditModal}
-        pet={petToEdit}
-        onClose={() => {
-          setShowEditModal(false);
-          setPetToEdit(null);
-        }}
-        onEdit={(id, fields) => {
-          handleEditPet(id, fields);
-          setSelectedPet(prev => prev ? { ...prev, ...fields } : (pets.find(p => p.id === id) ? { ...pets.find(p => p.id === id), ...fields } : null));
-        }}
-      />
+      {/* Edit pet inline overlay */}
+      {showEditModal && (
+        <EditPetModal
+          pet={petToEdit}
+          onClose={() => {
+            setShowEditModal(false);
+            setPetToEdit(null);
+          }}
+          onEdit={(id, fields) => {
+            handleEditPet(id, fields);
+            setSelectedPet(prev => prev ? { ...prev, ...fields } : (pets.find(p => p.id === id) ? { ...pets.find(p => p.id === id), ...fields } : null));
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -1123,12 +1121,20 @@ const styles = StyleSheet.create({
   },
 
   // Add Modal
+  fullscreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.card,
+    zIndex: 1000,
+  },
   addModal: {
     backgroundColor: Colors.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    height: '80%',
-    paddingBottom: 24,
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingBottom: 30,
   },
   addModalHeader: {
     flexDirection: 'row',
@@ -1171,7 +1177,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     marginBottom: 6,
-    marginTop: Spacing.md,
+    marginTop: 10,
   },
   textInput: {
     backgroundColor: Colors.background,
