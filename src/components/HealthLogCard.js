@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Image, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
@@ -60,65 +60,63 @@ export default function HealthLogCard({ log, onPress }) {
     </TouchableOpacity>
 
     {/* Record Details Modal */}
-    <Modal visible={showModal} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.detailsModal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Record Details</Text>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Ionicons name="close" size={24} color={Colors.textSecondary} />
-            </TouchableOpacity>
+    <Modal visible={showModal} animationType="slide" transparent={false} onRequestClose={() => setShowModal(false)}>
+      <View style={styles.modalFullContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Record Details</Text>
+          <TouchableOpacity onPress={() => setShowModal(false)}>
+            <Ionicons name="close" size={26} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+        
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Date</Text>
+            <Text style={styles.detailValue}>{log.date}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Status</Text>
+            <StatusBadge status={log.status} />
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Pet</Text>
+            <Text style={styles.detailValue}>{log.petEmoji} {log.petName}</Text>
           </View>
           
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Date</Text>
-              <Text style={styles.detailValue}>{log.date}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Status</Text>
-              <StatusBadge status={log.status} />
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Pet</Text>
-              <Text style={styles.detailValue}>{log.petEmoji} {log.petName}</Text>
-            </View>
-            
-            <View style={styles.divider} />
-            
-            <Text style={styles.detailLabel}>Condition</Text>
-            <Text style={styles.detailValuePrimary}>{log.issue}</Text>
-            
-            <Text style={[styles.detailLabel, { marginTop: Spacing.md }]}>Observations & Analysis</Text>
-            <Text style={styles.detailText}>{log.description}</Text>
+          <View style={styles.divider} />
+          
+          <Text style={styles.detailLabel}>Condition</Text>
+          <Text style={styles.detailValuePrimary}>{log.issue}</Text>
+          
+          <Text style={[styles.detailLabel, { marginTop: Spacing.md }]}>Observations & Analysis</Text>
+          <Text style={styles.detailText}>{log.description}</Text>
 
-            {log.imageUrl && (
-              <View style={styles.scannedImageContainer}>
-                <Text style={[styles.detailLabel, { marginTop: Spacing.md, marginBottom: Spacing.xs }]}>Scanned Symptom Photo</Text>
-                <Image
-                  source={{ uri: log.imageUrl }}
-                  style={styles.scannedImage}
-                  resizeMode="cover"
-                />
-              </View>
-            )}
+          {log.imageUrl && (
+            <View style={styles.scannedImageContainer}>
+              <Text style={[styles.detailLabel, { marginTop: Spacing.md, marginBottom: Spacing.xs }]}>Scanned Symptom Photo</Text>
+              <Image
+                source={{ uri: log.imageUrl }}
+                style={styles.scannedImage}
+                resizeMode="cover"
+              />
+            </View>
+          )}
 
-            <TouchableOpacity 
-              style={styles.chatbotLinkBtn}
-              onPress={() => {
-                const ctx = {
-                  suspectedCondition: log.issue,
-                  analysis: log.description
-                };
-                setShowModal(false);
-                navigation.navigate('Chatbot', { initialContext: ctx });
-              }}
-            >
-              <Ionicons name="chatbubbles" size={18} color="#fff" />
-              <Text style={styles.chatbotLinkText}>Chat with Vet about this</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+          <TouchableOpacity 
+            style={styles.chatbotLinkBtn}
+            onPress={() => {
+              const ctx = {
+                suspectedCondition: log.issue,
+                analysis: log.description
+              };
+              setShowModal(false);
+              navigation.navigate('Chatbot', { initialContext: ctx });
+            }}
+          >
+            <Ionicons name="chatbubbles" size={18} color="#fff" />
+            <Text style={styles.chatbotLinkText}>Chat with Vet about this</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     </Modal>
     </>
@@ -206,17 +204,11 @@ const styles = StyleSheet.create({
   },
   
   // Modal Styles
-  modalOverlay: {
+  modalFullContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  detailsModal: {
     backgroundColor: Colors.background,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    height: '80%',
-    padding: Spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 44 : 10,
+    paddingHorizontal: Spacing.lg,
   },
   modalHeader: {
     flexDirection: 'row',
