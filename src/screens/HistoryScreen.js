@@ -318,10 +318,6 @@ export default function HistoryScreen({ navigation }) {
                   <Text style={styles.modalMetaLabel}>Urgency Level</Text>
                   <StatusBadge status={selectedScan.status} />
                 </View>
-                <View style={styles.modalMetaCell}>
-                  <Text style={styles.modalMetaLabel}>Clinic Assessment</Text>
-                  <Text style={styles.modalMetaValue}>{selectedScan.clinic || 'AI Skin Scan'}</Text>
-                </View>
               </View>
 
               <View style={styles.modalDivider} />
