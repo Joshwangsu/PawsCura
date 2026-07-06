@@ -337,12 +337,6 @@ export default function HistoryScreen({ navigation }) {
                   {selectedScan.description || 'No detailed observations available for this record.'}
                 </Text>
 
-                {selectedScan.vet && (
-                  <View style={styles.vetRow}>
-                    <Ionicons name="person-circle-outline" size={20} color={Colors.primary} />
-                    <Text style={styles.vetText}>Reviewed by: {selectedScan.vet}</Text>
-                  </View>
-                )}
 
                 {(selectedScan.imageUrl || selectedScan.imageUri) && (
                   <View style={styles.modalImageContainer}>
