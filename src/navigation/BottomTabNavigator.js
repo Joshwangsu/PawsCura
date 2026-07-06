@@ -6,7 +6,7 @@ import HomeScreen from '../screens/HomeScreen';
 import PetsScreen from '../screens/PetsScreen';
 import ScanScreen from '../screens/ScanScreen';
 import ClinicScreen from '../screens/ClinicScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 import { Colors, Shadows } from '../theme/colors';
 
 const Tab = createBottomTabNavigator();
@@ -103,12 +103,12 @@ export default function BottomTabNavigator() {
           }}
         />
         <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
+          name="Records"
+          component={HistoryScreen}
           options={{
-            tabBarLabel: 'Settings',
+            tabBarLabel: 'Records',
             tabBarIcon: ({ focused }) => (
-              <TabIcon name="settings" focused={focused} />
+              <TabIcon name="document-text" focused={focused} />
             ),
           }}
         />

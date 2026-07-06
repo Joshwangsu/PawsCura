@@ -5,6 +5,7 @@ import SignupScreen from '../screens/auth/SignupScreen';
 import BottomTabNavigator from './BottomTabNavigator';
 import ChatbotScreen from '../screens/ChatbotScreen';
 import PaywallScreen from '../screens/PaywallScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import { useAuth } from '../context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '../theme/colors';
@@ -39,6 +40,7 @@ export default function AppNavigator() {
         // Main app
         <>
           <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
           
           {/* Global Modals/Overlays */}
           <Stack.Screen 

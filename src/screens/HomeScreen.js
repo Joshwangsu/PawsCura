@@ -70,16 +70,21 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             <View style={styles.headerRight}>
-              {/* Avatar / Settings tab shortcut */}
+              {/* Settings gear shortcut */}
               <TouchableOpacity 
-                style={styles.avatar} 
+                style={styles.settingsHeaderBtn} 
                 onPress={() => navigation.navigate('Settings')} 
                 activeOpacity={0.7}
               >
+                <Ionicons name="settings-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+
+              {/* Avatar */}
+              <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
                   {initial}
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -288,6 +293,16 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  settingsHeaderBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
   },
   avatar: {
     width: 44,

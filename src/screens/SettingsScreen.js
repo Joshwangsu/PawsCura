@@ -91,13 +91,20 @@ export default function SettingsScreen({ navigation }) {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
           <View style={styles.headerIconWrap}>
             <Ionicons name="settings-sharp" size={20} color={Colors.primary} />
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>App Settings</Text>
-            <Text style={styles.headerSub}>Manage your account, profile, and plans</Text>
+            <Text style={styles.headerSub} numberOfLines={1}>Manage your account, profile, and plans</Text>
           </View>
         </View>
       </LinearGradient>
