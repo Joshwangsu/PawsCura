@@ -51,15 +51,38 @@ export default function HistoryScreen({ navigation }) {
     });
   }, [healthLogs, activeFilter]);
 
+  // Bulletproof date parser to prevent any Invalid Date / NaN outputs
+  const parseDate = (val) => {
+    if (!val) return new Date(); // Fallback to now
+    
+    // If it is a Firestore Timestamp
+    if (typeof val.toDate === 'function') {
+      return val.toDate();
+    }
+    if (val.seconds !== undefined) {
+      return new Date(val.seconds * 1000);
+    }
+    if (typeof val.toMillis === 'function') {
+      return new Date(val.toMillis());
+    }
+    
+    // If it is already a Date object
+    if (val instanceof Date) {
+      return val;
+    }
+    
+    // If it is a parseable timestamp number or string
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d;
+    }
+    
+    return new Date(); // Fallback to now
+  };
+
   // Format date grouping key: "Monday, 1 December"
   const formatGroupDate = (timestamp) => {
-    if (!timestamp) return 'Unknown Date';
-    let d = new Date();
-    if (timestamp.toDate) {
-      d = timestamp.toDate();
-    } else {
-      d = new Date(timestamp);
-    }
+    const d = parseDate(timestamp);
     const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
     const day = d.getDate();
     const month = d.toLocaleDateString('en-US', { month: 'long' });
@@ -70,7 +93,7 @@ export default function HistoryScreen({ navigation }) {
   const groupedSections = useMemo(() => {
     const groups = {};
     filteredLogs.forEach((log) => {
-      const dateStr = formatGroupDate(log.date);
+      const dateStr = formatGroupDate(log._timestamp || log.date);
       if (!groups[dateStr]) {
         groups[dateStr] = [];
       }
@@ -85,13 +108,7 @@ export default function HistoryScreen({ navigation }) {
 
   // Format log time: e.g. "02:30 pm"
   const formatLogTime = (timestamp) => {
-    if (!timestamp) return '12:00\npm';
-    let d = new Date();
-    if (timestamp.toDate) {
-      d = timestamp.toDate();
-    } else {
-      d = new Date(timestamp);
-    }
+    const d = parseDate(timestamp);
     let hours = d.getHours();
     let minutes = d.getMinutes();
     const ampm = hours >= 12 ? 'pm' : 'am';
@@ -103,13 +120,7 @@ export default function HistoryScreen({ navigation }) {
 
   // Helper to get formatting of simple date for detail modal
   const formatDetailDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    let d = new Date();
-    if (timestamp.toDate) {
-      d = timestamp.toDate();
-    } else {
-      d = new Date(timestamp);
-    }
+    const d = parseDate(timestamp);
     return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -195,8 +206,8 @@ export default function HistoryScreen({ navigation }) {
                   {/* Left part: Time + Node line */}
                   <View style={styles.leftTimeline}>
                     <View style={styles.timeColumn}>
-                      <Text style={styles.timeVal}>{formatLogTime(log.date).split('\n')[0]}</Text>
-                      <Text style={styles.timeAmpm}>{formatLogTime(log.date).split('\n')[1]}</Text>
+                      <Text style={styles.timeVal}>{formatLogTime(log._timestamp || log.date).split('\n')[0]}</Text>
+                      <Text style={styles.timeAmpm}>{formatLogTime(log._timestamp || log.date).split('\n')[1]}</Text>
                     </View>
                     <View style={styles.nodeColumn}>
                       <View style={styles.verticalLine} />
@@ -293,7 +304,7 @@ export default function HistoryScreen({ navigation }) {
                 <View style={styles.modalMetaRow}>
                   <View style={styles.modalMetaCell}>
                     <Text style={styles.modalMetaLabel}>Assessment Date</Text>
-                    <Text style={styles.modalMetaValue}>{formatDetailDate(selectedScan.date)}</Text>
+                    <Text style={styles.modalMetaValue}>{formatDetailDate(selectedScan._timestamp || selectedScan.date)}</Text>
                   </View>
                   <View style={styles.modalMetaCell}>
                     <Text style={styles.modalMetaLabel}>Target Pet</Text>
