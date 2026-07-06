@@ -285,71 +285,69 @@ export default function HistoryScreen({ navigation }) {
         <Modal
           visible={!!selectedScan}
           animationType="slide"
-          transparent
+          transparent={false}
           onRequestClose={() => setSelectedScan(null)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.detailsModal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Scan Report</Text>
-                <TouchableOpacity onPress={() => setSelectedScan(null)}>
-                  <Ionicons name="close" size={24} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-              
-              <ScrollView 
-                showsVerticalScrollIndicator={false} 
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <View style={styles.modalMetaRow}>
-                  <View style={styles.modalMetaCell}>
-                    <Text style={styles.modalMetaLabel}>Assessment Date</Text>
-                    <Text style={styles.modalMetaValue}>{formatDetailDate(selectedScan._timestamp || selectedScan.date)}</Text>
-                  </View>
-                  <View style={styles.modalMetaCell}>
-                    <Text style={styles.modalMetaLabel}>Target Pet</Text>
-                    <Text style={styles.modalMetaValue}>
-                      {selectedScan.petEmoji || '🐾'} {selectedScan.petName} ({selectedScan.breed})
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.modalMetaRow}>
-                  <View style={styles.modalMetaCell}>
-                    <Text style={styles.modalMetaLabel}>Urgency Level</Text>
-                    <StatusBadge status={selectedScan.status} />
-                  </View>
-                  <View style={styles.modalMetaCell}>
-                    <Text style={styles.modalMetaLabel}>Clinic Assessment</Text>
-                    <Text style={styles.modalMetaValue}>{selectedScan.clinic || 'AI Skin Scan'}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.modalDivider} />
-
-                <Text style={styles.modalSectionTitle}>Suspected Skin Condition</Text>
-                <Text style={styles.modalConditionName}>{selectedScan.issue}</Text>
-                
-                <Text style={[styles.modalSectionTitle, { marginTop: Spacing.md }]}>
-                  AI Analysis & Recommendations
-                </Text>
-                <Text style={styles.modalDescriptionText}>
-                  {selectedScan.description || 'No detailed observations available for this record.'}
-                </Text>
-
-
-                {(selectedScan.imageUrl || selectedScan.imageUri) && (
-                  <View style={styles.modalImageContainer}>
-                    <Text style={styles.modalSectionTitle}>Symptom Photo Scan</Text>
-                    <Image
-                      source={{ uri: selectedScan.imageUrl || selectedScan.imageUri }}
-                      style={styles.modalScannedImage}
-                      resizeMode="cover"
-                    />
-                  </View>
-                )}
-              </ScrollView>
+          <View style={styles.modalFullContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Scan Report</Text>
+              <TouchableOpacity onPress={() => setSelectedScan(null)}>
+                <Ionicons name="close" size={26} color={Colors.textPrimary} />
+              </TouchableOpacity>
             </View>
+            
+            <ScrollView 
+              showsVerticalScrollIndicator={false} 
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              <View style={styles.modalMetaRow}>
+                <View style={styles.modalMetaCell}>
+                  <Text style={styles.modalMetaLabel}>Assessment Date</Text>
+                  <Text style={styles.modalMetaValue}>{formatDetailDate(selectedScan._timestamp || selectedScan.date)}</Text>
+                </View>
+                <View style={styles.modalMetaCell}>
+                  <Text style={styles.modalMetaLabel}>Target Pet</Text>
+                  <Text style={styles.modalMetaValue}>
+                    {selectedScan.petEmoji || '🐾'} {selectedScan.petName} ({selectedScan.breed})
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.modalMetaRow}>
+                <View style={styles.modalMetaCell}>
+                  <Text style={styles.modalMetaLabel}>Urgency Level</Text>
+                  <StatusBadge status={selectedScan.status} />
+                </View>
+                <View style={styles.modalMetaCell}>
+                  <Text style={styles.modalMetaLabel}>Clinic Assessment</Text>
+                  <Text style={styles.modalMetaValue}>{selectedScan.clinic || 'AI Skin Scan'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.modalDivider} />
+
+              <Text style={styles.modalSectionTitle}>Suspected Skin Condition</Text>
+              <Text style={styles.modalConditionName}>{selectedScan.issue}</Text>
+              
+              <Text style={[styles.modalSectionTitle, { marginTop: Spacing.md }]}>
+                AI Analysis & Recommendations
+              </Text>
+              <Text style={styles.modalDescriptionText}>
+                {selectedScan.description || 'No detailed observations available for this record.'}
+              </Text>
+
+
+              {(selectedScan.imageUrl || selectedScan.imageUri) && (
+                <View style={styles.modalImageContainer}>
+                  <Text style={styles.modalSectionTitle}>Symptom Photo Scan</Text>
+                  <Image
+                    source={{ uri: selectedScan.imageUrl || selectedScan.imageUri }}
+                    style={styles.modalScannedImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+            </ScrollView>
           </View>
         </Modal>
       )}
@@ -630,18 +628,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  modalOverlay: {
+  modalFullContainer: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  detailsModal: {
-    backgroundColor: Colors.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    height: '85%',
-    paddingBottom: 24,
-    ...Shadows.lg,
+    backgroundColor: Colors.background,
+    paddingTop: Platform.OS === 'ios' ? 44 : 10,
   },
   modalHeader: {
     flexDirection: 'row',
