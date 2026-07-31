@@ -16,3 +16,6 @@ veda
 *.njsproj
 *.sln
 *.sw?
+.env
+.env.*
+.env.local

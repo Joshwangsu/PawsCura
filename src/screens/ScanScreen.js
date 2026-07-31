@@ -96,19 +96,6 @@ export default function ScanScreen() {
         return;
       }
 
-      let permissionResult;
-      
-      if (useCamera) {
-        permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      } else {
-        permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      }
-
-      if (permissionResult.granted === false) {
-        alert("Permission to access camera/gallery is required!");
-        return;
-      }
-
       const options = {
         mediaTypes: 'images',
         allowsEditing: true,
@@ -134,9 +121,18 @@ export default function ScanScreen() {
         
         setLoading(true);
         try {
-          const analysisResult = await analyzePetCondition(asset.base64, mimeType);
+          const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets);
           setResult(analysisResult);
           incrementScanCount();
+
+          // Auto-record to pet's medical history immediately
+          const targetPet = analysisResult.matchedPetId
+            ? pets.find((p) => p.id === analysisResult.matchedPetId)
+            : (pets.length > 0 ? pets[0] : null);
+
+          if (targetPet) {
+            autoSaveToPetRecord(analysisResult, targetPet, asset.uri);
+          }
         } catch (error) {
           alert("Failed to analyze image. Please try again.");
         } finally {
@@ -149,8 +145,42 @@ export default function ScanScreen() {
     }
   };
 
-  const handleSaveToRecords = async (pet) => {
-    if (!result) return;
+  const autoSaveToPetRecord = async (analysis, pet, localUri) => {
+    try {
+      let finalImageUrl = null;
+      if (localUri) {
+        finalImageUrl = await uploadToCloudinary(localUri);
+      }
+
+      const newLog = {
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        petId: pet.id,
+        petName: pet.name,
+        petIcon: pet.icon || 'paw',
+        breed: pet.breed,
+        issue: analysis.suspectedCondition,
+        description: analysis.analysis,
+        status: analysis.urgencyLevel,
+        clinic: 'AI Assessment',
+        vet: 'Virtual Vet Assistant',
+        imageUrl: finalImageUrl,
+        autoRecorded: true,
+      };
+
+      await addHealthLog(newLog);
+    } catch (err) {
+      console.error("Auto-save error:", err);
+    }
+  };
+
+  const matchedPet = result?.matchedPetId ? pets.find((p) => p.id === result.matchedPetId) : (pets.length > 0 ? pets[0] : null);
+
+  const handleSaveToRecords = async (targetPet) => {
+    const petToSave = targetPet || matchedPet || (pets.length > 0 ? pets[0] : null);
+    if (!result || !petToSave) {
+      setShowPetModal(true);
+      return;
+    }
     
     setSaving(true);
     try {
@@ -159,12 +189,13 @@ export default function ScanScreen() {
         finalImageUrl = await uploadToCloudinary(imageUri);
       }
 
-      // Create new health log object matching the mock schema
+      // Create new health log object
       const newLog = {
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        petName: pet.name,
-        petEmoji: pet.emoji,
-        breed: pet.breed,
+        petId: petToSave.id,
+        petName: petToSave.name,
+        petIcon: petToSave.icon || 'paw',
+        breed: petToSave.breed,
         issue: result.suspectedCondition,
         description: result.analysis,
         status: result.urgencyLevel,
@@ -178,7 +209,7 @@ export default function ScanScreen() {
       setShowSuccessModal(true);
     } catch (error) {
       console.error(error);
-      alert("Could not upload assessment photo to Cloudinary. Please check your internet connection and settings.");
+      alert("Could not upload assessment photo to Cloudinary. Please check your internet connection.");
     } finally {
       setSaving(false);
     }
@@ -207,7 +238,7 @@ export default function ScanScreen() {
             <Text style={[styles.headerTitle, { marginBottom: 0 }]}>Pet Scan</Text>
           </View>
           <Text style={styles.headerSub}>
-            Scan visible skin conditions, wounds or abnormalities
+            Scan visible skin conditions, wounds or abnormalities with AI pet matching
           </Text>
         </LinearGradient>
 
@@ -220,7 +251,7 @@ export default function ScanScreen() {
               {loading && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="large" color="#fff" />
-                  <Text style={styles.loadingText}>AI Veterinarian Analyzing...</Text>
+                  <Text style={styles.loadingText}>AI Matching & Analyzing...</Text>
                 </View>
               )}
             </View>
@@ -254,7 +285,35 @@ export default function ScanScreen() {
               <Ionicons name="medical" size={20} color={Colors.primary} />
               <Text style={styles.resultTitle}>AI Assessment Complete</Text>
             </View>
-            
+
+            {/* Matched Pet Auto-Identification & Auto-Record Banner */}
+            {matchedPet ? (
+              <View style={styles.autoMatchedBanner}>
+                <View style={styles.matchedLeft}>
+                  <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.matchedLabel}>Auto-Recorded to Medical History</Text>
+                    <Text style={styles.matchedPetName} numberOfLines={1}>
+                      {matchedPet.name} ({matchedPet.breed}) • {result.matchConfidence || 92}% Match
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowPetModal(true)}
+                  style={styles.changePetBtn}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.changePetText}>Reassign</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={() => setShowPetModal(true)} style={styles.unmatchedBanner}>
+                <Ionicons name="alert-circle-outline" size={16} color={Colors.warning} />
+                <Text style={styles.unmatchedText}>Select pet profile to attach this record</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+
             <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(result.urgencyLevel) }]}>
               <Text style={styles.urgencyText}>{result.urgencyLevel}</Text>
             </View>
@@ -292,39 +351,45 @@ export default function ScanScreen() {
               Disclaimer: This is an AI assessment and not a substitute for professional veterinary care.
             </Text>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: Spacing.md }}>
-              <TouchableOpacity 
-                style={[styles.chatbotLinkBtn, { flex: 1, marginTop: 0 }]}
-                onPress={() => navigation.navigate('Chatbot', { initialContext: result })}
-              >
-                <Ionicons name="chatbubbles" size={18} color="#fff" />
-                <Text style={styles.chatbotLinkText}>Ask Virtual Vet</Text>
-              </TouchableOpacity>
+            <View style={{ gap: 10, marginTop: Spacing.md }}>
+              {/* Urgent Case Warning */}
+              {result.urgencyLevel && result.urgencyLevel.toLowerCase().includes('urgent') && (
+                <TouchableOpacity
+                  style={styles.urgentWarningBanner}
+                  activeOpacity={0.85}
+                  onPress={() => Alert.alert(
+                    'Urgent Veterinary Attention Required',
+                    'Your pet may need immediate professional care. We strongly recommend visiting a nearby vet clinic as soon as possible.',
+                    [
+                      { text: 'Find Nearby Clinics', onPress: () => navigation.navigate('Clinics') },
+                      { text: 'Dismiss', style: 'cancel' },
+                    ]
+                  )}
+                >
+                  <Ionicons name="warning" size={18} color="#92400E" />
+                  <Text style={styles.urgentWarningText}>
+                    Urgent case detected. Tap to see options.
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#92400E" />
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity 
-                style={[styles.chatbotLinkBtn, { flex: 1, marginTop: 0, backgroundColor: Colors.success }]}
-                onPress={() => {
-                  if (!isPremium && healthLogs.length >= 1) {
-                    navigation.navigate('Paywall');
-                  } else {
-                    setShowPetModal(true);
+              {/* Primary Action: Ask Virtual Vet */}
+              <TouchableOpacity
+                style={styles.chatbotLinkBtn}
+                onPress={() => navigation.navigate('Chatbot', {
+                  initialContext: {
+                    ...result,
+                    petName: matchedPet ? matchedPet.name : result.matchedPetName || 'Pet',
+                    matchedPetName: matchedPet ? matchedPet.name : result.matchedPetName || 'Pet',
                   }
-                }}
+                })}
+                activeOpacity={0.85}
               >
-                <Ionicons name="save-outline" size={18} color="#fff" />
-                <Text style={styles.chatbotLinkText}>Save to Record</Text>
+                <Ionicons name="chatbubbles" size={20} color="#fff" />
+                <Text style={styles.chatbotLinkText}>Ask Virtual Vet Chatbot</Text>
               </TouchableOpacity>
             </View>
-
-            {result.urgencyLevel !== 'No Concerns Detected' && (
-              <TouchableOpacity 
-                style={[styles.chatbotLinkBtn, { marginTop: Spacing.sm, backgroundColor: Colors.danger }]}
-                onPress={() => navigation.navigate('Clinics')}
-              >
-                <Ionicons name="location" size={18} color="#fff" />
-                <Text style={styles.chatbotLinkText}>Find Nearby Clinics</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
 
@@ -646,6 +711,83 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textPrimary,
   },
+  autoMatchedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EBF2FB',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    gap: 8,
+  },
+  matchedLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  matchedLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  matchedPetName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primaryDark,
+  },
+  changePetBtn: {
+    backgroundColor: Colors.card,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexShrink: 0,
+  },
+  changePetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  unmatchedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  unmatchedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
+  },
+  urgentWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  urgentWarningText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
+  },
   urgencyBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
@@ -697,16 +839,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: BorderRadius.full,
-    marginTop: Spacing.lg,
     gap: 8,
     ...Shadows.sm,
   },
   chatbotLinkText: {
     color: '#fff',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  viewRecordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.full,
+    gap: 8,
+  },
+  viewRecordText: {
+    color: Colors.primary,
     fontWeight: '700',
     fontSize: 14,
+  },
+  optionalClinicBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 6,
+    marginTop: 4,
+  },
+  optionalClinicText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // Action Buttons
@@ -718,7 +888,6 @@ const styles = StyleSheet.create({
   actionBtnWrapper: {
     flex: 1,
     borderRadius: BorderRadius.full,
-    overflow: 'hidden',
     ...Shadows.md,
   },
   galleryBtnWrapper: {
@@ -730,6 +899,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     gap: 8,
+    borderRadius: BorderRadius.full,
+    overflow: 'hidden',
   },
   galleryBtn: {
     flexDirection: 'row',

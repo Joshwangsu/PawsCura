@@ -10,7 +10,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -20,8 +22,15 @@ import { useSubscription } from '../context/SubscriptionContext';
 import HealthLogCard from '../components/HealthLogCard';
 
 const SPECIES_OPTIONS = [
-  { label: 'Dog', emoji: '🐶', value: 'dog' },
-  { label: 'Cat', emoji: '🐱', value: 'cat' },
+  { label: 'Dog', icon: 'paw-outline', value: 'dog' },
+  { label: 'Cat', icon: 'paw-outline', value: 'cat' },
+];
+
+const PHOTO_ANGLES = [
+  { id: 'front', title: 'Front Face', desc: 'Required • Primary avatar & face matching', icon: 'person-circle-outline', required: true, scoreBonus: 70 },
+  { id: 'side', title: 'Side Profile', desc: 'Recommended • Body shape & side coat', icon: 'body-outline', required: false, scoreBonus: 15 },
+  { id: 'back', title: 'Back / Top View', desc: 'Recommended • Dorsal coat pattern', icon: 'eye-outline', required: false, scoreBonus: 9 },
+  { id: 'chest', title: 'Chest & Markings', desc: 'Optional • Underbody & unique spots', icon: 'shield-outline', required: false, scoreBonus: 4 },
 ];
 
 const PET_ACCENT_COLORS = [
@@ -47,11 +56,23 @@ const EMPTY_FORM = {
 
 // PetDetailModal removed. Profile and diagnostic history details are now displayed inline using dropdown selectors.
 
+function calculateAccuracyScore(photos = []) {
+  if (!photos || photos.length === 0) return 0;
+  let score = 0;
+  PHOTO_ANGLES.forEach((angle) => {
+    if (photos.some((p) => p.angle === angle.id)) {
+      score += angle.scoreBonus;
+    }
+  });
+  return Math.min(score, 98);
+}
+
 function AddPetModal({ onClose, onAdd }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
-  const [step, setStep] = useState(1); // 1 = basic, 2 = details
+  const [photos, setPhotos] = useState([]); // [{ angle: 'front', uri, base64, mimeType }]
+  const [step, setStep] = useState(1); // 1 = Basic, 2 = Guided Photos, 3 = Details
 
   const updateField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -60,12 +81,62 @@ function AddPetModal({ onClose, onAdd }) {
     updateField('species', sp.value);
   };
 
+  const handleCaptureAngle = async (angleId) => {
+    Alert.alert(
+      'Capture Pet Angle',
+      'Select camera or gallery to capture photo for AI matching:',
+      [
+        {
+          text: 'Camera',
+          onPress: async () => {
+            const res = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.5,
+              base64: true,
+            });
+            if (!res.canceled && res.assets && res.assets.length > 0) {
+              const asset = res.assets[0];
+              const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
+              setPhotos((prev) => [
+                ...prev.filter((p) => p.angle !== angleId),
+                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+              ]);
+            }
+          },
+        },
+        {
+          text: 'Gallery',
+          onPress: async () => {
+            const res = await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.5,
+              base64: true,
+            });
+            if (!res.canceled && res.assets && res.assets.length > 0) {
+              const asset = res.assets[0];
+              const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
+              setPhotos((prev) => [
+                ...prev.filter((p) => p.angle !== angleId),
+                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+              ]);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleSubmit = () => {
     if (!form.name.trim() || !selectedSpecies) {
-      Alert.alert('Missing Info', 'Please enter your pet\'s name and select a species.');
+      Alert.alert('Missing Required Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
+    const frontPhoto = photos.find((p) => p.angle === 'front');
+
     onAdd({
       id: `p_${Date.now()}`,
       name: form.name.trim(),
@@ -76,13 +147,18 @@ function AddPetModal({ onClose, onAdd }) {
       gender: form.gender || 'Unknown',
       birthday: form.birthday || '',
       notes: form.notes || '',
-      emoji: selectedSpecies.emoji,
+      icon: selectedSpecies.icon,
       color: colorPair.bg,
       accentColor: colorPair.accent,
+      referencePhotos: photos,
+      primaryPhotoUri: frontPhoto ? frontPhoto.uri : null,
+      accuracyScore: calculateAccuracyScore(photos),
     });
+
     setForm(EMPTY_FORM);
     setSelectedSpecies(null);
     setSelectedColor(0);
+    setPhotos([]);
     setStep(1);
     onClose();
   };
@@ -91,201 +167,297 @@ function AddPetModal({ onClose, onAdd }) {
     setForm(EMPTY_FORM);
     setSelectedSpecies(null);
     setSelectedColor(0);
+    setPhotos([]);
     setStep(1);
     onClose();
   };
 
+  const currentScore = calculateAccuracyScore(photos);
+
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.fullscreenOverlay}
     >
       <View style={styles.addModal}>
-          {/* Modal header */}
-          <View style={styles.addModalHeader}>
+        {/* Modal Header */}
+        <View style={styles.addModalHeader}>
+          <View>
             <Text style={styles.addModalTitle}>
-              {step === 1 ? 'Add New Pet' : 'More Details'}
+              {step === 1 ? 'Add New Pet' : step === 2 ? 'Guided Visual Registration' : 'Additional Details'}
             </Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color={Colors.textSecondary} />
-            </TouchableOpacity>
+            <Text style={styles.addModalSub}>
+              {step === 1 ? 'Basic profile info' : step === 2 ? 'Photos for AI Auto-Identification' : 'Notes & health background'}
+            </Text>
           </View>
-
-          {/* Step indicator */}
-          <View style={styles.stepRow}>
-            <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]} />
-            <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
-            <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]} />
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
-            {step === 1 ? (
-              <>
-                {/* Pet Name */}
-                <Text style={styles.fieldLabel}>Pet Name *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Buddy"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={form.name}
-                  onChangeText={(v) => updateField('name', v)}
-                />
-
-                {/* Species */}
-                <Text style={styles.fieldLabel}>Species *</Text>
-                <View style={styles.speciesGrid}>
-                  {SPECIES_OPTIONS.map((sp) => (
-                    <TouchableOpacity
-                      key={sp.value}
-                      style={[
-                        styles.speciesBtn,
-                        selectedSpecies?.value === sp.value && styles.speciesBtnActive,
-                      ]}
-                      onPress={() => handleSpeciesSelect(sp)}
-                    >
-                      <Text style={styles.speciesEmoji}>{sp.emoji}</Text>
-                      <Text
-                        style={[
-                          styles.speciesLabel,
-                          selectedSpecies?.value === sp.value && styles.speciesLabelActive,
-                        ]}
-                      >
-                        {sp.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Color theme */}
-                <Text style={styles.fieldLabel}>Card Color</Text>
-                <View style={styles.colorRow}>
-                  {PET_ACCENT_COLORS.map((c, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: c.accent },
-                        selectedColor === idx && styles.colorDotSelected,
-                      ]}
-                      onPress={() => setSelectedColor(idx)}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : (
-              <>
-                {/* Breed */}
-                <Text style={styles.fieldLabel}>Breed</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Golden Retriever"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={form.breed}
-                  onChangeText={(v) => updateField('breed', v)}
-                />
-
-                {/* Age + Weight */}
-                <View style={styles.rowInputs}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Age</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. 3 years"
-                      placeholderTextColor={Colors.textSecondary}
-                      value={form.age}
-                      onChangeText={(v) => updateField('age', v)}
-                    />
-                  </View>
-                  <View style={{ width: Spacing.md }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Weight</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. 8 kg"
-                      placeholderTextColor={Colors.textSecondary}
-                      value={form.weight}
-                      onChangeText={(v) => updateField('weight', v)}
-                    />
-                  </View>
-                </View>
-
-                {/* Gender */}
-                <Text style={styles.fieldLabel}>Gender</Text>
-                <View style={styles.genderRow}>
-                  {['Male', 'Female'].map((g) => (
-                    <TouchableOpacity
-                      key={g}
-                      style={[styles.genderBtn, form.gender === g && styles.genderBtnActive]}
-                      onPress={() => updateField('gender', g)}
-                    >
-                      <Ionicons
-                        name={g === 'Male' ? 'male' : 'female'}
-                        size={16}
-                        color={form.gender === g ? '#fff' : Colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.genderLabel,
-                          form.gender === g && styles.genderLabelActive,
-                        ]}
-                      >
-                        {g}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Birthday */}
-                <Text style={styles.fieldLabel}>Birthday</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Jan 15, 2022"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={form.birthday}
-                  onChangeText={(v) => updateField('birthday', v)}
-                />
-
-                {/* Notes */}
-                <Text style={styles.fieldLabel}>Notes</Text>
-                <TextInput
-                  style={[styles.textInput, styles.textArea]}
-                  placeholder="Any special info about your pet..."
-                  placeholderTextColor={Colors.textSecondary}
-                  multiline
-                  numberOfLines={3}
-                  value={form.notes}
-                  onChangeText={(v) => updateField('notes', v)}
-                />
-              </>
-            )}
-          </ScrollView>
-
-          {/* Action buttons */}
-          <View style={styles.addModalFooter}>
-            {step === 2 && (
-              <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
-                <Text style={styles.backBtnText}>Back</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.nextBtn}
-              onPress={step === 1 ? () => setStep(2) : handleSubmit}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={[Colors.primary, '#1E3F66']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.nextBtnGradient}
-              >
-                <Text style={styles.nextBtnText}>
-                  {step === 1 ? 'Next →' : 'Add Pet'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={handleClose}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+
+        {/* Step Indicator */}
+        <View style={styles.stepRow}>
+          <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]} />
+          <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
+          <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]} />
+          <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
+          <View style={[styles.stepDot, step >= 3 && styles.stepDotActive]} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
+          {step === 1 && (
+            <>
+              {/* Pet Name */}
+              <Text style={styles.fieldLabel}>Pet Name *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Buddy"
+                placeholderTextColor={Colors.textSecondary}
+                value={form.name}
+                onChangeText={(v) => updateField('name', v)}
+              />
+
+              {/* Species */}
+              <Text style={styles.fieldLabel}>Species *</Text>
+              <View style={styles.speciesGrid}>
+                {SPECIES_OPTIONS.map((sp) => (
+                  <TouchableOpacity
+                    key={sp.value}
+                    style={[
+                      styles.speciesBtn,
+                      selectedSpecies?.value === sp.value && styles.speciesBtnActive,
+                    ]}
+                    onPress={() => handleSpeciesSelect(sp)}
+                  >
+                    <Ionicons
+                      name={sp.icon}
+                      size={20}
+                      color={selectedSpecies?.value === sp.value ? Colors.primary : Colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.speciesLabel,
+                        selectedSpecies?.value === sp.value && styles.speciesLabelActive,
+                      ]}
+                    >
+                      {sp.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Breed */}
+              <Text style={styles.fieldLabel}>Breed</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Golden Retriever"
+                placeholderTextColor={Colors.textSecondary}
+                value={form.breed}
+                onChangeText={(v) => updateField('breed', v)}
+              />
+
+              {/* Theme Color */}
+              <Text style={styles.fieldLabel}>Card Accent</Text>
+              <View style={styles.colorRow}>
+                {PET_ACCENT_COLORS.map((c, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.colorDot,
+                      { backgroundColor: c.accent },
+                      selectedColor === idx && styles.colorDotSelected,
+                    ]}
+                    onPress={() => setSelectedColor(idx)}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              {/* Accuracy Meter Card */}
+              <View style={styles.accuracyCard}>
+                <View style={styles.accuracyHeader}>
+                  <Ionicons name="sparkles" size={18} color={Colors.primary} />
+                  <Text style={styles.accuracyTitle}>AI Scan Accuracy</Text>
+                  <Text style={styles.accuracyPercent}>{currentScore}%</Text>
+                </View>
+                <View style={styles.accuracyBarTrack}>
+                  <View style={[styles.accuracyBarFill, { width: `${currentScore}%` }]} />
+                </View>
+                <Text style={styles.accuracySub}>
+                  {currentScore === 0
+                    ? 'Take at least 1 photo for AI auto-identification during scans.'
+                    : currentScore >= 90
+                    ? 'Excellent! High confidence pet detection enabled.'
+                    : 'Add more angles to boost recognition accuracy.'}
+                </Text>
+              </View>
+
+              {/* Guided Photo Angle Slots */}
+              {PHOTO_ANGLES.map((angle) => {
+                const existingPhoto = photos.find((p) => p.angle === angle.id);
+                return (
+                  <View key={angle.id} style={styles.photoSlotCard}>
+                    <View style={styles.photoSlotHeader}>
+                      <View style={styles.photoSlotIconWrap}>
+                        <Ionicons name={angle.icon} size={20} color={Colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.photoSlotTitle}>{angle.title}</Text>
+                          {angle.required && <Text style={styles.requiredTag}>Required</Text>}
+                        </View>
+                        <Text style={styles.photoSlotDesc}>{angle.desc}</Text>
+                      </View>
+                    </View>
+
+                    {existingPhoto ? (
+                      <View style={styles.photoPreviewWrapper}>
+                        <Image source={{ uri: existingPhoto.uri }} style={styles.photoSlotPreview} />
+                        <TouchableOpacity
+                          style={styles.retakeBtn}
+                          onPress={() => handleCaptureAngle(angle.id)}
+                        >
+                          <Ionicons name="camera-reverse" size={16} color="#fff" />
+                          <Text style={styles.retakeBtnText}>Retake</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.addPhotoSlotBtn}
+                        onPress={() => handleCaptureAngle(angle.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
+                        <Text style={styles.addPhotoSlotText}>Capture {angle.title}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              {/* Age + Weight */}
+              <View style={styles.rowInputs}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Age (years)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="e.g. 3"
+                    placeholderTextColor={Colors.textSecondary}
+                    keyboardType="numeric"
+                    value={form.age}
+                    onChangeText={(v) => updateField('age', v)}
+                  />
+                </View>
+                <View style={{ width: Spacing.md }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="e.g. 8.5"
+                    placeholderTextColor={Colors.textSecondary}
+                    keyboardType="numeric"
+                    value={form.weight}
+                    onChangeText={(v) => updateField('weight', v)}
+                  />
+                </View>
+              </View>
+
+              {/* Gender */}
+              <Text style={styles.fieldLabel}>Gender</Text>
+              <View style={styles.genderRow}>
+                {['Male', 'Female'].map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    style={[styles.genderBtn, form.gender === g && styles.genderBtnActive]}
+                    onPress={() => updateField('gender', g)}
+                  >
+                    <Ionicons
+                      name={g === 'Male' ? 'male' : 'female'}
+                      size={16}
+                      color={form.gender === g ? '#fff' : Colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.genderLabel,
+                        form.gender === g && styles.genderLabelActive,
+                      ]}
+                    >
+                      {g}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Birthday */}
+              <Text style={styles.fieldLabel}>Birthday</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Jan 15, 2022"
+                placeholderTextColor={Colors.textSecondary}
+                value={form.birthday}
+                onChangeText={(v) => updateField('birthday', v)}
+              />
+
+              {/* Notes */}
+              <Text style={styles.fieldLabel}>Medical Notes / Allergies</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                placeholder="Any special info, allergies or chronic conditions..."
+                placeholderTextColor={Colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                value={form.notes}
+                onChangeText={(v) => updateField('notes', v)}
+              />
+            </>
+          )}
+        </ScrollView>
+
+        {/* Footer Actions */}
+        <View style={styles.addModalFooter}>
+          {step > 1 && (
+            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
+              <Text style={styles.backBtnText}>Back</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.nextBtn}
+            onPress={() => {
+              if (step === 1) {
+                if (!form.name.trim() || !selectedSpecies) {
+                  Alert.alert('Missing Info', 'Please enter your pet\'s name and species.');
+                  return;
+                }
+                setStep(2);
+              } else if (step === 2) {
+                setStep(3);
+              } else {
+                handleSubmit();
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[Colors.primary, '#1E3F66']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.nextBtnGradient}
+            >
+              <Text style={styles.nextBtnText}>
+                {step === 3 ? 'Save Profile' : 'Continue'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -293,6 +465,7 @@ function EditPetModal({ pet, onClose, onEdit }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
+  const [photos, setPhotos] = useState([]);
   const [step, setStep] = useState(1);
 
   React.useEffect(() => {
@@ -307,10 +480,11 @@ function EditPetModal({ pet, onClose, onEdit }) {
         birthday: pet.birthday || '',
         notes: pet.notes || '',
       });
-      const sp = SPECIES_OPTIONS.find(o => o.value === pet.species) || SPECIES_OPTIONS[0];
+      const sp = SPECIES_OPTIONS.find((o) => o.value === pet.species) || SPECIES_OPTIONS[0];
       setSelectedSpecies(sp);
-      const colorIndex = PET_ACCENT_COLORS.findIndex(o => o.bg === pet.color || o.accent === pet.accentColor);
+      const colorIndex = PET_ACCENT_COLORS.findIndex((o) => o.bg === pet.color || o.accent === pet.accentColor);
       setSelectedColor(colorIndex >= 0 ? colorIndex : 0);
+      setPhotos(Array.isArray(pet.referencePhotos) ? pet.referencePhotos : []);
       setStep(1);
     }
   }, [pet]);
@@ -322,12 +496,62 @@ function EditPetModal({ pet, onClose, onEdit }) {
     updateField('species', sp.value);
   };
 
+  const handleCaptureAngle = async (angleId) => {
+    Alert.alert(
+      'Capture Pet Angle',
+      'Select camera or gallery to capture photo for AI matching:',
+      [
+        {
+          text: 'Camera',
+          onPress: async () => {
+            const res = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.5,
+              base64: true,
+            });
+            if (!res.canceled && res.assets && res.assets.length > 0) {
+              const asset = res.assets[0];
+              const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
+              setPhotos((prev) => [
+                ...prev.filter((p) => p.angle !== angleId),
+                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+              ]);
+            }
+          },
+        },
+        {
+          text: 'Gallery',
+          onPress: async () => {
+            const res = await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.5,
+              base64: true,
+            });
+            if (!res.canceled && res.assets && res.assets.length > 0) {
+              const asset = res.assets[0];
+              const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
+              setPhotos((prev) => [
+                ...prev.filter((p) => p.angle !== angleId),
+                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+              ]);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleSubmit = () => {
     if (!form.name.trim() || !selectedSpecies) {
       Alert.alert('Missing Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
+    const frontPhoto = photos.find((p) => p.angle === 'front');
+
     onEdit(pet.id, {
       name: form.name.trim(),
       species: form.species,
@@ -337,210 +561,177 @@ function EditPetModal({ pet, onClose, onEdit }) {
       gender: form.gender || 'Unknown',
       birthday: form.birthday || '',
       notes: form.notes || '',
-      emoji: selectedSpecies.emoji,
+      icon: selectedSpecies.icon,
       color: colorPair.bg,
       accentColor: colorPair.accent,
+      referencePhotos: photos,
+      primaryPhotoUri: frontPhoto ? frontPhoto.uri : pet.primaryPhotoUri || null,
+      accuracyScore: calculateAccuracyScore(photos),
     });
     onClose();
   };
 
+  const currentScore = calculateAccuracyScore(photos);
+
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.fullscreenOverlay}
     >
       <View style={styles.addModal}>
-          {/* Modal header */}
-          <View style={styles.addModalHeader}>
-            <Text style={styles.addModalTitle}>
-              {step === 1 ? 'Edit Pet Profile' : 'More Details'}
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Step indicator */}
-          <View style={styles.stepRow}>
-            <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]} />
-            <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
-            <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]} />
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
-            {step === 1 ? (
-              <>
-                {/* Pet Name */}
-                <Text style={styles.fieldLabel}>Pet Name *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Buddy"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={form.name}
-                  onChangeText={(v) => updateField('name', v)}
-                />
-
-                {/* Species */}
-                <Text style={styles.fieldLabel}>Species *</Text>
-                <View style={styles.speciesGrid}>
-                  {SPECIES_OPTIONS.map((sp) => (
-                    <TouchableOpacity
-                      key={sp.value}
-                      style={[
-                        styles.speciesBtn,
-                        selectedSpecies?.value === sp.value && styles.speciesBtnActive,
-                      ]}
-                      onPress={() => handleSpeciesSelect(sp)}
-                    >
-                      <Text style={styles.speciesEmoji}>{sp.emoji}</Text>
-                      <Text
-                        style={[
-                          styles.speciesLabel,
-                          selectedSpecies?.value === sp.value && styles.speciesLabelActive,
-                        ]}
-                      >
-                        {sp.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Color theme */}
-                <Text style={styles.fieldLabel}>Card Color</Text>
-                <View style={styles.colorRow}>
-                  {PET_ACCENT_COLORS.map((color, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: color.accent },
-                        selectedColor === idx && styles.colorDotSelected,
-                      ]}
-                      onPress={() => setSelectedColor(idx)}
-                    />
-                  ))}
-                </View>
-
-              </>
-            ) : (
-              <>
-                {/* Breed */}
-                <Text style={styles.fieldLabel}>Breed</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Golden Retriever"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={form.breed}
-                  onChangeText={(v) => updateField('breed', v)}
-                />
-
-                {/* Age & Weight Row */}
-                <View style={styles.formRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Age (years)</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. 3"
-                      placeholderTextColor={Colors.textSecondary}
-                      keyboardType="numeric"
-                      value={form.age}
-                      onChangeText={(v) => updateField('age', v)}
-                    />
-                  </View>
-                  <View style={{ width: Spacing.md }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Weight (kg)</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. 12.5"
-                      placeholderTextColor={Colors.textSecondary}
-                      keyboardType="numeric"
-                      value={form.weight}
-                      onChangeText={(v) => updateField('weight', v)}
-                    />
-                  </View>
-                </View>
-
-                {/* Gender */}
-                <Text style={styles.fieldLabel}>Gender</Text>
-                <View style={styles.genderRow}>
-                  {['Male', 'Female'].map((g) => (
-                    <TouchableOpacity
-                      key={g}
-                      style={[
-                        styles.genderBtn,
-                        form.gender === g && styles.genderBtnActive,
-                      ]}
-                      onPress={() => updateField('gender', g)}
-                    >
-                      <Text
-                        style={[
-                          styles.genderText,
-                          form.gender === g && styles.genderTextActive,
-                        ]}
-                      >
-                        {g}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Birthday */}
-                <Text style={styles.fieldLabel}>Birthday</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. 12 Oct 2020"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={form.birthday}
-                  onChangeText={(v) => updateField('birthday', v)}
-                />
-
-                {/* Notes */}
-                <Text style={styles.fieldLabel}>Notes / Conditions</Text>
-                <TextInput
-                  style={[styles.textInput, styles.notesInput]}
-                  placeholder="e.g. Allergies to chicken, very active..."
-                  placeholderTextColor={Colors.textSecondary}
-                  multiline
-                  numberOfLines={3}
-                  value={form.notes}
-                  onChangeText={(v) => updateField('notes', v)}
-                />
-
-              </>
-            )}
-          </ScrollView>
-
-          {/* Action footer */}
-          <View style={styles.addModalFooter}>
-            {step === 2 && (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={() => setStep(1)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.backBtnText}>Back</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.nextBtn}
-              onPress={step === 1 ? () => setStep(2) : handleSubmit}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={[Colors.primary, '#1E3F66']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.nextBtnGradient}
-              >
-                <Text style={styles.nextBtnText}>
-                  {step === 1 ? 'Next →' : 'Save Details'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.addModalHeader}>
+          <Text style={styles.addModalTitle}>Edit Pet Profile</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+
+        <View style={styles.stepRow}>
+          <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]} />
+          <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
+          <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
+          {step === 1 ? (
+            <>
+              <Text style={styles.fieldLabel}>Pet Name *</Text>
+              <TextInput
+                style={styles.textInput}
+                value={form.name}
+                onChangeText={(v) => updateField('name', v)}
+              />
+
+              <Text style={styles.fieldLabel}>Species *</Text>
+              <View style={styles.speciesGrid}>
+                {SPECIES_OPTIONS.map((sp) => (
+                  <TouchableOpacity
+                    key={sp.value}
+                    style={[
+                      styles.speciesBtn,
+                      selectedSpecies?.value === sp.value && styles.speciesBtnActive,
+                    ]}
+                    onPress={() => handleSpeciesSelect(sp)}
+                  >
+                    <Ionicons name={sp.icon} size={20} color={selectedSpecies?.value === sp.value ? Colors.primary : Colors.textSecondary} />
+                    <Text style={[styles.speciesLabel, selectedSpecies?.value === sp.value && styles.speciesLabelActive]}>
+                      {sp.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Breed</Text>
+              <TextInput
+                style={styles.textInput}
+                value={form.breed}
+                onChangeText={(v) => updateField('breed', v)}
+              />
+
+              <View style={styles.formRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Age (yrs)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={form.age}
+                    onChangeText={(v) => updateField('age', v)}
+                  />
+                </View>
+                <View style={{ width: Spacing.md }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={form.weight}
+                    onChangeText={(v) => updateField('weight', v)}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>Notes</Text>
+              <TextInput
+                style={[styles.textInput, styles.notesInput]}
+                multiline
+                numberOfLines={3}
+                value={form.notes}
+                onChangeText={(v) => updateField('notes', v)}
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.accuracyCard}>
+                <View style={styles.accuracyHeader}>
+                  <Ionicons name="sparkles" size={18} color={Colors.primary} />
+                  <Text style={styles.accuracyTitle}>AI Scan Accuracy</Text>
+                  <Text style={styles.accuracyPercent}>{currentScore}%</Text>
+                </View>
+                <View style={styles.accuracyBarTrack}>
+                  <View style={[styles.accuracyBarFill, { width: `${currentScore}%` }]} />
+                </View>
+              </View>
+
+              {PHOTO_ANGLES.map((angle) => {
+                const existingPhoto = photos.find((p) => p.angle === angle.id);
+                return (
+                  <View key={angle.id} style={styles.photoSlotCard}>
+                    <View style={styles.photoSlotHeader}>
+                      <View style={styles.photoSlotIconWrap}>
+                        <Ionicons name={angle.icon} size={20} color={Colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.photoSlotTitle}>{angle.title}</Text>
+                        <Text style={styles.photoSlotDesc}>{angle.desc}</Text>
+                      </View>
+                    </View>
+
+                    {existingPhoto ? (
+                      <View style={styles.photoPreviewWrapper}>
+                        <Image source={{ uri: existingPhoto.uri }} style={styles.photoSlotPreview} />
+                        <TouchableOpacity style={styles.retakeBtn} onPress={() => handleCaptureAngle(angle.id)}>
+                          <Ionicons name="camera-reverse" size={16} color="#fff" />
+                          <Text style={styles.retakeBtnText}>Change</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={styles.addPhotoSlotBtn} onPress={() => handleCaptureAngle(angle.id)}>
+                        <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
+                        <Text style={styles.addPhotoSlotText}>Add Photo</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </>
+          )}
+        </ScrollView>
+
+        <View style={styles.addModalFooter}>
+          {step === 2 && (
+            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
+              <Text style={styles.backBtnText}>Back</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.nextBtn}
+            onPress={step === 1 ? () => setStep(2) : handleSubmit}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[Colors.primary, '#1E3F66']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.nextBtnGradient}
+            >
+              <Text style={styles.nextBtnText}>
+                {step === 1 ? 'Photos →' : 'Save Details'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -651,8 +842,12 @@ export default function PetsScreen() {
               activeOpacity={0.8}
             >
               <View style={styles.dropdownLeft}>
-                <View style={[styles.dropdownEmojiCircle, { backgroundColor: activePet?.color || Colors.primaryLight }]}>
-                  <Text style={styles.dropdownEmoji}>{activePet?.emoji || '🐾'}</Text>
+                <View style={[styles.dropdownEmojiCircle, { backgroundColor: activePet?.accentColor || Colors.primary }]}>
+                  {activePet?.primaryPhotoUri ? (
+                    <Image source={{ uri: activePet.primaryPhotoUri }} style={styles.avatarImg} />
+                  ) : (
+                    <Ionicons name={activePet?.icon || 'paw'} size={20} color="#fff" />
+                  )}
                 </View>
                 <View>
                   <Text style={styles.dropdownLabel}>Active Pet Profile</Text>
@@ -671,10 +866,21 @@ export default function PetsScreen() {
                 style={styles.dashboardHeader}
               >
                 <View style={styles.dashboardHeaderInner}>
-                  <Text style={styles.dashboardEmoji}>{activePet?.emoji}</Text>
+                  <View style={styles.avatarCircle}>
+                    {activePet?.primaryPhotoUri ? (
+                      <Image source={{ uri: activePet.primaryPhotoUri }} style={styles.avatarImgLarge} />
+                    ) : (
+                      <Ionicons name={activePet?.icon || 'paw'} size={28} color="#fff" />
+                    )}
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.dashboardName}>{activePet?.name}</Text>
-                    <Text style={styles.dashboardBreed}>{activePet?.breed}</Text>
+                    <View style={styles.accuracyTagBadge}>
+                      <Ionicons name="sparkles" size={10} color="#fff" />
+                      <Text style={styles.accuracyTagText}>
+                        {calculateAccuracyScore(activePet?.referencePhotos)}% Match Score
+                      </Text>
+                    </View>
                   </View>
                   
                   {/* Action buttons (Edit & Delete) */}
@@ -705,10 +911,10 @@ export default function PetsScreen() {
                 <View style={styles.detailGrid}>
                   {[
                     { label: 'Species', value: activePet?.species, icon: 'paw' },
-                    { label: 'Age', value: activePet?.age !== undefined ? `${activePet.age} yrs` : 'Unknown', icon: 'calendar' },
-                    { label: 'Weight', value: activePet?.weight !== undefined ? `${activePet.weight} kg` : 'Unknown', icon: 'barbell' },
-                    { label: 'Gender', value: activePet?.gender || '—', icon: 'male-female' },
-                    { label: 'Birthday', value: activePet?.birthday || '—', icon: 'gift' },
+                    { label: 'Age', value: activePet?.age !== undefined ? `${activePet.age} yrs` : 'Not specified', icon: 'calendar' },
+                    { label: 'Weight', value: activePet?.weight !== undefined ? `${activePet.weight} kg` : 'Not specified', icon: 'barbell' },
+                    { label: 'Gender', value: activePet?.gender || 'Not specified', icon: 'male-female' },
+                    { label: 'Birthday', value: activePet?.birthday || 'Not specified', icon: 'gift' },
                   ].map((info) => (
                     <View key={info.label} style={styles.detailInfoCard}>
                       <Ionicons name={info.icon} size={16} color={activePet?.accentColor || Colors.primary} />
@@ -1044,8 +1250,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  dashboardEmoji: {
-    fontSize: 36,
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 21,
+  },
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImgLarge: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+  },
+  accuracyTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  accuracyTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
   },
   dashboardName: {
     fontSize: 20,
@@ -1065,9 +1303,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   dashboardBody: {
     padding: Spacing.md,
@@ -1148,6 +1388,140 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textPrimary,
   },
+  addModalSub: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  accuracyCard: {
+    backgroundColor: '#EBF2FB',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  accuracyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  accuracyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.primary,
+    flex: 1,
+    marginLeft: 6,
+  },
+  accuracyPercent: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.primaryDark,
+  },
+  accuracyBarTrack: {
+    height: 8,
+    backgroundColor: '#DBEAFE',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  accuracyBarFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: 4,
+  },
+  accuracySub: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  photoSlotCard: {
+    backgroundColor: Colors.background,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  photoSlotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  photoSlotIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EBF2FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoSlotTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  requiredTag: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.danger,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  photoSlotDesc: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  addPhotoSlotBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    backgroundColor: Colors.card,
+  },
+  addPhotoSlotText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  photoPreviewWrapper: {
+    position: 'relative',
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    height: 140,
+  },
+  photoSlotPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  retakeBtn: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  retakeBtnText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1198,13 +1572,15 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   speciesBtn: {
-    width: '30%',
-    padding: 10,
+    width: '48%',
+    padding: 12,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
     borderColor: Colors.border,
     alignItems: 'center',
-    gap: 4,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   speciesBtnActive: {
     borderColor: Colors.primary,
@@ -1304,15 +1680,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   historyBadge: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.card,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   historyBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.textSecondary,
   },
   emptyLogsCard: {
     backgroundColor: Colors.card,

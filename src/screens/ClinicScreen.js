@@ -36,23 +36,28 @@ export default function ClinicScreen() {
   const loadLocation = async () => {
     setLoading(true);
     setErrorMsg(null);
+    let lat = 14.5995;
+    let lng = 120.9842;
+
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        setLoading(false);
-        return;
+      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (loc && loc.coords) {
+        setLocation(loc);
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
       }
+    } catch (err) {
+      console.log("Using default location coordinates fallback:", err);
+      setLocation({
+        coords: { latitude: lat, longitude: lng }
+      });
+    }
 
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
-
-      // Fetch live clinics from our API wrapper
-      const data = await getNearbyVeterinarians(loc.coords.latitude, loc.coords.longitude);
+    try {
+      const data = await getNearbyVeterinarians(lat, lng);
       setClinics(data);
     } catch (err) {
       console.error(err);
-      setErrorMsg('Failed to fetch nearby clinics');
     } finally {
       setLoading(false);
     }

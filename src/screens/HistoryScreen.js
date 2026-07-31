@@ -261,25 +261,6 @@ export default function HistoryScreen({ navigation }) {
         )}
       />
 
-      {/* ── Sticky bottom Add Assessment Button ───────── */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={styles.stickyAddBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('Scan')}
-        >
-          <LinearGradient
-            colors={[Colors.primary, '#1E3F66']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.stickyAddGradient}
-          >
-            <Ionicons name="add" size={22} color="#fff" />
-            <Text style={styles.stickyAddText}>New Assessment</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-
       {/* ── Record Details Modal ──────────────────────── */}
       {selectedScan && (
         <Modal
@@ -343,6 +324,27 @@ export default function HistoryScreen({ navigation }) {
                   />
                 </View>
               )}
+
+              {/* Ask Virtual Vet Chatbot Action Button */}
+              <TouchableOpacity
+                style={styles.modalChatbotBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  const targetScan = selectedScan;
+                  setSelectedScan(null);
+                  navigation.navigate('Chatbot', {
+                    initialContext: {
+                      matchedPetName: targetScan.petName,
+                      petName: targetScan.petName,
+                      suspectedCondition: targetScan.issue,
+                      analysis: targetScan.description,
+                    },
+                  });
+                }}
+              >
+                <Ionicons name="chatbubbles" size={18} color="#fff" />
+                <Text style={styles.modalChatbotBtnText}>Ask Virtual Vet Chatbot</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </Modal>
@@ -410,7 +412,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: Spacing.md,
-    paddingBottom: 90,
+    paddingBottom: 24,
   },
   dateGroup: {
     marginBottom: Spacing.lg,
@@ -708,6 +710,7 @@ const styles = StyleSheet.create({
   },
   modalImageContainer: {
     marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   modalScannedImage: {
     width: '100%',
@@ -715,5 +718,22 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     marginTop: Spacing.xs,
     backgroundColor: Colors.background,
+  },
+  modalChatbotBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.full,
+    gap: 8,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xl,
+    ...Shadows.sm,
+  },
+  modalChatbotBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

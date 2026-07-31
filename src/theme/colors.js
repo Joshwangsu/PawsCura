@@ -27,9 +27,10 @@ export const Colors = {
   info: '#3B82F6',
   infoBg: '#DBEAFE',
 
-  // UI
-  border: '#E5E7EB',
-  borderLight: '#F3F4F6',
+  // UI & Borders (Enforce visible 10%+ contrast edges)
+  border: '#D1D5DB',       // Distinct edge contrast (not light grey)
+  borderLight: '#E5E7EB',  // Subtle inner divider
+  borderStrong: '#9CA3AF', // Focused or emphasized border
   shadow: '#000000',
   divider: '#E5E7EB',
 
