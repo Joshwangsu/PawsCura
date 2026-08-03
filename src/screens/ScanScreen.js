@@ -389,6 +389,16 @@ export default function ScanScreen() {
                 <Ionicons name="chatbubbles" size={20} color="#fff" />
                 <Text style={styles.chatbotLinkText}>Ask Virtual Vet Chatbot</Text>
               </TouchableOpacity>
+
+              {/* Secondary Action: Find Nearby Clinics */}
+              <TouchableOpacity
+                style={styles.resultClinicsBtn}
+                onPress={() => navigation.navigate('Clinics')}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="location-outline" size={18} color={Colors.primary} />
+                <Text style={styles.resultClinicsBtnText}>Find Nearby Vet Clinics</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -424,6 +434,24 @@ export default function ScanScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Find Nearby Clinics Banner */}
+        <TouchableOpacity
+          style={styles.findClinicsBanner}
+          onPress={() => navigation.navigate('Clinics')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.findClinicsBannerLeft}>
+            <View style={styles.findClinicsIconCircle}>
+              <Ionicons name="location" size={20} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.findClinicsBannerTitle}>Need a Professional Vet?</Text>
+              <Text style={styles.findClinicsBannerSub}>Find nearby veterinary clinics & directions</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+        </TouchableOpacity>
 
         {/* Tips */}
         <View style={styles.tipsCard}>
@@ -1123,5 +1151,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginTop: 12,
+  },
+  resultClinicsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.full,
+    gap: 8,
+    marginTop: 4,
+  },
+  resultClinicsBtnText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  findClinicsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    ...Shadows.sm,
+  },
+  findClinicsBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  findClinicsIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EBF2FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  findClinicsBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  findClinicsBannerSub: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
 });

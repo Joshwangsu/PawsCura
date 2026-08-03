@@ -4,12 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
-export default function ClinicCard({ clinic, onNavigate }) {
+export default function ClinicCard({ clinic, onPressDetails }) {
   const stars = Math.round(clinic.rating);
 
   return (
-    <View style={styles.card}>
-
+    <TouchableOpacity 
+      style={styles.card} 
+      activeOpacity={0.88}
+      onPress={() => onPressDetails && onPressDetails(clinic)}
+    >
       <View style={styles.content}>
         {/* Header row */}
         <View style={styles.headerRow}>
@@ -47,33 +50,19 @@ export default function ClinicCard({ clinic, onNavigate }) {
           <StatusBadge status={clinic.isOpen ? 'Open' : 'Closed'} size="sm" />
         </View>
 
-        {/* Hours */}
-        <Text style={styles.hours}>
-          <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-          {'  '}{clinic.hours}
-        </Text>
-
-        {/* Footer: specialties + navigate button */}
+        {/* Hours & Details Button */}
         <View style={styles.footerRow}>
-          <View style={styles.specialties}>
-            {clinic.specialties.slice(0, 2).map((s) => (
-              <View key={s} style={styles.specialtyChip}>
-                <Text style={styles.specialtyText}>{s}</Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.hours}>
+            <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+            {'  '}{clinic.hours}
+          </Text>
 
-          <TouchableOpacity
-            style={styles.navigateBtn}
-            onPress={() => onNavigate && onNavigate(clinic)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="navigate" size={14} color={Colors.textInverse} />
-            <Text style={styles.navigateText}>Navigate</Text>
-          </TouchableOpacity>
+          <View style={styles.detailsBtn}>
+            <Text style={styles.detailsBtnText}>View Details & Reviews →</Text>
+          </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -172,18 +161,15 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-  navigateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
+  detailsBtn: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
     borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryBg,
   },
-  navigateText: {
-    color: Colors.textInverse,
-    fontSize: 12,
-    fontWeight: '700',
+  detailsBtnText: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Image,
   ScrollView,
   Platform,
   ActivityIndicator,
@@ -141,19 +140,10 @@ export default function SignupScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
         >
 
-          {/* Brand Top Left */}
+          {/* Brand Header */}
           <View style={styles.brandContainer}>
             <Text style={styles.appName}>PawsCura</Text>
             <Text style={styles.tagline}>Join the Pet Health Community</Text>
-          </View>
-
-          {/* Hero */}
-          <View style={styles.heroSection}>
-            <Image
-              source={require('../../../assets/Landing.png')}
-              style={styles.mascot}
-              resizeMode="contain"
-            />
           </View>
 
           {/* Card */}
@@ -281,28 +271,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: 80,
+    paddingTop: 50,
     paddingBottom: 40,
   },
 
   brandContainer: {
     alignItems: 'flex-start',
-    marginTop: 20, /* to clear back button */
-    marginBottom: 10,
+    marginTop: 10,
+    marginBottom: 16,
     zIndex: 1,
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-    paddingTop: 10,
-  },
-  mascot: {
-    width: 380,
-    height: 380,
-    marginBottom: 0,
-    marginTop: -10,
-    zIndex: 0,
-    transform: [{ scale: 1.1 }],
   },
   appName: {
     fontSize: 28,
@@ -321,7 +298,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     ...Shadows.lg,
     marginBottom: Spacing.lg,
-    marginTop: -140,
+    marginTop: 0,
     zIndex: 1,
   },
   cardTitle: {

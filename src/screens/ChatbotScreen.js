@@ -18,7 +18,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { chatWithVet } from '../services/gemini';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { doc, setDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 
 import { Modal } from 'react-native';
@@ -28,6 +28,7 @@ export default function ChatbotScreen({ route, navigation }) {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
 
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'history'
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -37,6 +38,19 @@ export default function ChatbotScreen({ route, navigation }) {
   const flatListRef = useRef(null);
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length;
+
+  const deleteSession = async (sessId) => {
+    if (!user || sessions.length <= 1) return;
+    try {
+      await deleteDoc(doc(db, 'chats', user.uid, 'userSessions', sessId));
+      if (activeSessionId === sessId) {
+        const remaining = sessions.filter(s => s.id !== sessId);
+        if (remaining.length > 0) setActiveSessionId(remaining[0].id);
+      }
+    } catch (err) {
+      console.error('Error deleting session:', err);
+    }
+  };
 
   // Helper to format session title as "Pet Name - Condition"
   const formatSessionTitle = (ctx, fallbackName) => {
@@ -142,6 +156,7 @@ export default function ChatbotScreen({ route, navigation }) {
     try {
       await setDoc(doc(db, 'chats', user.uid, 'userSessions', sessId), newSess);
       setActiveSessionId(sessId);
+      setActiveTab('chat');
       setShowHistoryModal(false);
     } catch (err) {
       console.error('Error creating chat session:', err);
@@ -237,16 +252,8 @@ export default function ChatbotScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* Action Controls (Visible History Tab Button & New Chat) */}
+        {/* Action Controls (New Chat Button) */}
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerHistoryBtn}
-            onPress={() => setShowHistoryModal(true)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="time-outline" size={16} color="#fff" />
-            <Text style={styles.headerHistoryBtnText}>History</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={() => createNewSession()}
@@ -257,59 +264,180 @@ export default function ChatbotScreen({ route, navigation }) {
         </View>
       </LinearGradient>
 
-      {/* Chat Area */}
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.chatList}
-          showsVerticalScrollIndicator={false}
-        />
+      {/* ── Segmented Tab Switcher: Chat vs History ── */}
+      <View style={styles.tabSegmentContainer}>
+        <TouchableOpacity
+          style={[styles.tabSegmentBtn, activeTab === 'chat' && styles.tabSegmentBtnActive]}
+          onPress={() => setActiveTab('chat')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="chatbubbles"
+            size={16}
+            color={activeTab === 'chat' ? Colors.primary : Colors.textMuted}
+          />
+          <Text style={[styles.tabSegmentText, activeTab === 'chat' && styles.tabSegmentTextActive]}>
+            Active Chat
+          </Text>
+        </TouchableOpacity>
 
-        {isTyping && (
-          <View style={styles.typingIndicator}>
-            <Text style={styles.typingText}>AI is typing...</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          style={[styles.tabSegmentBtn, activeTab === 'history' && styles.tabSegmentBtnActive]}
+          onPress={() => setActiveTab('history')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="time"
+            size={16}
+            color={activeTab === 'history' ? Colors.primary : Colors.textMuted}
+          />
+          <Text style={[styles.tabSegmentText, activeTab === 'history' && styles.tabSegmentTextActive]}>
+            History ({sessions.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-        {!isPremium && userMessageCount >= 5 ? (
-          <View style={styles.chatLimitBanner}>
-            <Ionicons name="warning" size={24} color={Colors.warning} />
-            <Text style={styles.chatLimitText}>You've reached your free message limit for this session.</Text>
-            <TouchableOpacity
-              style={styles.chatLimitBtn}
-              onPress={() => navigation.navigate('Paywall')}
+      {/* ── Active Tab View ── */}
+      {activeTab === 'chat' ? (
+        /* Chat Area */
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            contentContainerStyle={styles.chatList}
+            showsVerticalScrollIndicator={false}
+          />
+
+          {isTyping && (
+            <View style={styles.typingIndicator}>
+              <Text style={styles.typingText}>AI is typing...</Text>
+            </View>
+          )}
+
+          {!isPremium && userMessageCount >= 5 ? (
+            <View style={styles.chatLimitBanner}>
+              <Ionicons name="warning" size={24} color={Colors.warning} />
+              <Text style={styles.chatLimitText}>You've reached your free message limit for this session.</Text>
+              <TouchableOpacity
+                style={styles.chatLimitBtn}
+                onPress={() => navigation.navigate('Paywall')}
+              >
+                <Text style={styles.chatLimitBtnText}>Upgrade to Premium</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Ask about your pet..."
+                placeholderTextColor={Colors.textMuted}
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!inputText.trim() || isTyping}
+              >
+                <Ionicons name="send" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      ) : (
+        /* History Area */
+        <View style={styles.historyTabContainer}>
+          {/* Start New Chat Action Banner */}
+          <TouchableOpacity
+            style={styles.historyNewChatCard}
+            onPress={() => createNewSession()}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[Colors.primary, Colors.primaryLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.historyNewChatGradient}
             >
-              <Text style={styles.chatLimitBtnText}>Upgrade to Premium</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Ask about your pet..."
-              placeholderTextColor={Colors.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              maxLength={500}
-            />
-            <TouchableOpacity
-              style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={!inputText.trim() || isTyping}
-            >
-              <Ionicons name="send" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </KeyboardAvoidingView>
+              <View style={styles.historyNewChatIcon}>
+                <Ionicons name="add-circle" size={26} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyNewChatTitle}>Start New Consultation</Text>
+                <Text style={styles.historyNewChatSub}>Ask questions about a new symptom or pet</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <Text style={styles.historySectionTitle}>Conversation History ({sessions.length})</Text>
+
+          <FlatList
+            data={sessions}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.historyListContent}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => {
+              const isActive = item.id === activeSessionId;
+              return (
+                <TouchableOpacity
+                  style={[styles.historyCard, isActive && styles.historyCardActive]}
+                  onPress={() => {
+                    setActiveSessionId(item.id);
+                    setActiveTab('chat');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.historyCardIcon, isActive && styles.historyCardIconActive]}>
+                    <Ionicons
+                      name="chatbubble-ellipses"
+                      size={20}
+                      color={isActive ? '#fff' : Colors.primary}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.historyCardHeaderRow}>
+                      <Text style={[styles.historyCardTitle, isActive && styles.historyCardTitleActive]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      {isActive && (
+                        <View style={styles.activeBadge}>
+                          <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.historyCardDate}>
+                      {item.date ? `Updated ${item.date}` : 'Recent Consultation'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {sessions.length > 1 && (
+                      <TouchableOpacity
+                        onPress={() => deleteSession(item.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ padding: 4 }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+                    <Ionicons name="chevron-forward" size={18} color={isActive ? Colors.primary : Colors.textMuted} />
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+      )}
 
       {/* ChatGPT-Style Side Drawer Chat History Overlay */}
       <Modal visible={showHistoryModal} animationType="fade" transparent>
@@ -676,5 +804,150 @@ const styles = StyleSheet.create({
   drawerItemTitleActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+
+  // ── Tab Segment Switcher Styles ──
+  tabSegmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+    gap: 8,
+  },
+  tabSegmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: BorderRadius.full || 20,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  tabSegmentBtnActive: {
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+  },
+  tabSegmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  tabSegmentTextActive: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+
+  // ── History Tab View Styles ──
+  historyTabContainer: {
+    flex: 1,
+    padding: Spacing.md,
+    backgroundColor: Colors.background,
+  },
+  historyNewChatCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 20,
+    ...Shadows.sm,
+  },
+  historyNewChatGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  historyNewChatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyNewChatTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  historyNewChatSub: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historySectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  historyListContent: {
+    paddingBottom: 24,
+  },
+  historyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 10,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    ...Shadows.sm,
+  },
+  historyCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+  },
+  historyCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyCardIconActive: {
+    backgroundColor: Colors.primary,
+  },
+  historyCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 3,
+  },
+  historyCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  historyCardTitleActive: {
+    color: Colors.primary,
+  },
+  activeBadge: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  historyCardDate: {
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });

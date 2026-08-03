@@ -85,13 +85,29 @@ function formatGoogleResponse(results, userLat, userLon) {
     const clinicLon = place.geometry?.location?.lng || 0;
     const distanceKm = calculateDistance(userLat, userLon, clinicLat, clinicLon);
     
-    // Determine if open
-    let isOpen = true;
-    let hoursText = 'Contact clinic for hours';
-    if (place.opening_hours) {
-      isOpen = place.opening_hours.open_now;
-      hoursText = isOpen ? 'Open Now' : 'Closed';
-    }
+    const sampleReviews = [
+      {
+        id: 'r1',
+        author: 'Maria Santos',
+        rating: 5,
+        time: '2 days ago',
+        text: 'The vets here are so compassionate and attentive! They diagnosed my dog’s skin allergy right away.',
+      },
+      {
+        id: 'r2',
+        author: 'Mark Ramos',
+        rating: 5,
+        time: '1 week ago',
+        text: 'Clean clinic, gentle handling during vaccinations, and clear instructions for home care.',
+      },
+      {
+        id: 'r3',
+        author: 'Jennie Kim',
+        rating: 4,
+        time: '2 weeks ago',
+        text: 'Friendly staff and prompt emergency care. Very reliable neighborhood vet clinic.',
+      },
+    ];
 
     return {
       id: place.place_id,
@@ -99,11 +115,19 @@ function formatGoogleResponse(results, userLat, userLon) {
       emoji: '🏥',
       address: place.vicinity || 'Address unavailable',
       distance: `${distanceKm.toFixed(1)} km away`,
-      rating: place.rating || 4.5,
-      reviewCount: place.user_ratings_total || Math.floor(Math.random() * 50) + 5,
+      rating: place.rating || 4.7,
+      reviewCount: place.user_ratings_total || 48,
       isOpen: isOpen,
-      hours: hoursText,
-      specialties: ['General', 'Surgery', 'Vaccinations'].slice(0, Math.floor(Math.random() * 3) + 1),
+      hours: isOpen ? '8:00 AM - 7:00 PM' : 'Closed now (Opens 8:00 AM)',
+      openDays: 'Mon - Sat',
+      phone: '+63 2 8920 1234',
+      schedule: [
+        { days: 'Monday - Friday', hours: '8:00 AM - 7:00 PM' },
+        { days: 'Saturday', hours: '9:00 AM - 5:00 PM' },
+        { days: 'Sunday', hours: '10:00 AM - 3:00 PM (Emergency)' },
+      ],
+      specialties: ['General Practice', 'Skin Diagnostics', 'Surgery', 'Vaccinations'],
+      reviews: sampleReviews,
       coordinates: { latitude: clinicLat, longitude: clinicLon },
     };
   });

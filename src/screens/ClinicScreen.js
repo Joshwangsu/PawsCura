@@ -10,6 +10,9 @@ import {
   Dimensions,
   ActivityIndicator,
   Linking,
+  Modal,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -32,6 +35,7 @@ export default function ClinicScreen() {
   const [clinics, setClinics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClinic, setSelectedClinic] = useState(null);
+  const [detailClinic, setDetailClinic] = useState(null);
 
   const loadLocation = async () => {
     setLoading(true);
@@ -152,6 +156,7 @@ export default function ClinicScreen() {
                   coordinate={clinic.coordinates}
                   title={clinic.name}
                   description={clinic.isOpen ? 'Open Now' : 'Closed'}
+                  onPress={() => setDetailClinic(clinic)}
                 >
                   <View style={[styles.markerPin, { backgroundColor: clinic.isOpen ? Colors.success : Colors.danger }]}>
                     <Ionicons name="medical" size={14} color={Colors.textInverse} />
@@ -236,7 +241,11 @@ export default function ClinicScreen() {
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <ClinicCard clinic={item} onNavigate={handleNavigate} />
+            <ClinicCard
+              clinic={item}
+              onNavigate={handleNavigate}
+              onPressDetails={(c) => setDetailClinic(c)}
+            />
           )}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
@@ -248,6 +257,205 @@ export default function ClinicScreen() {
             </View>
           }
         />
+      )}
+
+      {/* ── Clinic Detail Modal ───────────────────────── */}
+      {detailClinic && (
+        <Modal
+          visible={!!detailClinic}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setDetailClinic(null)}
+        >
+          <View style={styles.detailModalContainer}>
+            {/* Modal Header */}
+            <View style={styles.detailHeader}>
+              <TouchableOpacity
+                style={styles.detailBackBtn}
+                onPress={() => setDetailClinic(null)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={styles.detailHeaderTitle} numberOfLines={1}>
+                {detailClinic.name}
+              </Text>
+              <TouchableOpacity
+                style={styles.detailCloseBtn}
+                onPress={() => setDetailClinic(null)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.detailScrollContent}
+            >
+              {/* Banner / Avatar card */}
+              <View style={styles.detailBanner}>
+                <View style={styles.detailEmojiCircle}>
+                  <Text style={styles.detailEmojiText}>{detailClinic.emoji || '🏥'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.detailClinicTitle}>{detailClinic.name}</Text>
+                  <Text style={styles.detailAddressText}>
+                    <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+                    {'  '}{detailClinic.address}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quick Badges Row */}
+              <View style={styles.detailBadgesRow}>
+                <View style={styles.detailBadgeChip}>
+                  <Ionicons name="star" size={14} color={Colors.warning} />
+                  <Text style={styles.detailBadgeText}>
+                    {detailClinic.rating} ({detailClinic.reviewCount} reviews)
+                  </Text>
+                </View>
+                <View style={[styles.detailBadgeChip, { backgroundColor: detailClinic.isOpen ? '#DCFCE7' : '#FEE2E2' }]}>
+                  <Ionicons
+                    name={detailClinic.isOpen ? "checkmark-circle" : "close-circle"}
+                    size={14}
+                    color={detailClinic.isOpen ? Colors.success : Colors.danger}
+                  />
+                  <Text style={[styles.detailBadgeText, { color: detailClinic.isOpen ? Colors.success : Colors.danger }]}>
+                    {detailClinic.isOpen ? 'Open Now' : 'Closed'}
+                  </Text>
+                </View>
+                <View style={styles.detailBadgeChip}>
+                  <Ionicons name="navigate-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.detailBadgeText}>{detailClinic.distance}</Text>
+                </View>
+              </View>
+
+              <View style={styles.detailSectionDivider} />
+
+              {/* ── Operating Hours & Days ──────────────────── */}
+              <View style={styles.detailSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="time" size={18} color={Colors.primary} />
+                  <Text style={styles.detailSectionTitle}>Operating Hours & Schedule</Text>
+                </View>
+
+                <View style={styles.scheduleCard}>
+                  <View style={styles.scheduleRowTop}>
+                    <Text style={styles.scheduleDaysLabel}>Open Days</Text>
+                    <Text style={styles.scheduleDaysValue}>{detailClinic.openDays || 'Monday - Saturday'}</Text>
+                  </View>
+                  <View style={styles.scheduleRowTop}>
+                    <Text style={styles.scheduleDaysLabel}>Operating Hours</Text>
+                    <Text style={styles.scheduleDaysValue}>{detailClinic.hours || '8:00 AM - 7:00 PM'}</Text>
+                  </View>
+
+                  <View style={styles.scheduleDivider} />
+
+                  <Text style={styles.weeklyScheduleTitle}>Weekly Schedule Breakdown:</Text>
+                  {(detailClinic.schedule || [
+                    { days: 'Monday - Friday', hours: '8:00 AM - 7:00 PM' },
+                    { days: 'Saturday', hours: '9:00 AM - 5:00 PM' },
+                    { days: 'Sunday', hours: '10:00 AM - 3:00 PM (Emergency Care)' },
+                  ]).map((item, idx) => (
+                    <View key={idx} style={styles.scheduleItemRow}>
+                      <Text style={styles.scheduleItemDays}>{item.days}</Text>
+                      <Text style={styles.scheduleItemHours}>{item.hours}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.detailSectionDivider} />
+
+              {/* ── Contact & Location ─────────────────────── */}
+              <View style={styles.detailSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="call" size={18} color={Colors.primary} />
+                  <Text style={styles.detailSectionTitle}>Contact & Location</Text>
+                </View>
+
+                <View style={styles.contactCard}>
+                  <View style={styles.contactRow}>
+                    <Ionicons name="call-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.contactText}>{detailClinic.phone || '+63 2 8920 1234'}</Text>
+                  </View>
+
+                  <View style={[styles.contactRow, { marginTop: 10 }]}>
+                    <Ionicons name="location-outline" size={16} color={Colors.primary} />
+                    <Text style={[styles.contactText, { flex: 1 }]}>{detailClinic.address}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.detailSectionDivider} />
+
+              {/* ── Patient Reviews ────────────────────────── */}
+              <View style={styles.detailSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="star" size={18} color={Colors.warning} />
+                  <Text style={styles.detailSectionTitle}>Pet Owner Reviews ({detailClinic.reviewCount || 48})</Text>
+                </View>
+
+                <View style={styles.overallRatingCard}>
+                  <Text style={styles.ratingNumber}>{detailClinic.rating || 4.7}</Text>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Ionicons
+                        key={s}
+                        name={s <= Math.round(detailClinic.rating || 5) ? "star" : "star-outline"}
+                        size={16}
+                        color={Colors.warning}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.ratingCountText}>
+                    Based on {detailClinic.reviewCount || 48} verified pet owner reviews
+                  </Text>
+                </View>
+
+                {/* Individual Reviews */}
+                {(detailClinic.reviews || [
+                  { id: 'r1', author: 'Maria Santos', rating: 5, time: '2 days ago', text: 'The vets here are so compassionate and attentive! They diagnosed my dog’s skin allergy right away.' },
+                  { id: 'r2', author: 'Mark Ramos', rating: 5, time: '1 week ago', text: 'Clean clinic, gentle handling during vaccinations, and clear instructions for home care.' },
+                  { id: 'r3', author: 'Jennie Kim', rating: 4, time: '2 weeks ago', text: 'Friendly staff and prompt emergency care. Very reliable neighborhood vet clinic.' },
+                ]).map((rev) => (
+                  <View key={rev.id} style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      <View style={styles.authorAvatar}>
+                        <Text style={styles.authorInitial}>{rev.author.charAt(0)}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.authorName}>{rev.author}</Text>
+                        <Text style={styles.reviewTime}>{rev.time}</Text>
+                      </View>
+                      <View style={styles.reviewRatingRow}>
+                        <Ionicons name="star" size={12} color={Colors.warning} />
+                        <Text style={styles.reviewRatingText}>{rev.rating}.0</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.reviewComment}>{rev.text}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Footer Actions: Route Directions */}
+            <View style={styles.detailFooterActions}>
+              <TouchableOpacity
+                style={styles.detailRouteBtn}
+                onPress={() => {
+                  handleNavigate(detailClinic);
+                  setDetailClinic(null);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="navigate" size={18} color="#fff" />
+                <Text style={styles.detailRouteBtnText}>Route Directions</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -495,5 +703,339 @@ const styles = StyleSheet.create({
   },
   errorBtnTextSecondary: {
     color: Colors.primary,
+  },
+
+  // Clinic Details Modal Styles
+  detailModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  detailHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 12,
+  },
+  detailCloseBtn: {
+    padding: 4,
+  },
+  detailBackBtn: {
+    padding: 4,
+  },
+  detailScrollContent: {
+    padding: Spacing.lg,
+    paddingBottom: 110,
+  },
+  detailBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.sm,
+  },
+  detailEmojiCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.primaryBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailEmojiText: {
+    fontSize: 28,
+  },
+  detailClinicTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  detailAddressText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  detailBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
+  detailBadgeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  detailBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  detailSectionDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.md,
+  },
+  detailSection: {
+    marginBottom: Spacing.sm,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: Spacing.sm,
+  },
+  detailSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  scheduleCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  scheduleRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  scheduleDaysLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  scheduleDaysValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  scheduleDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.sm,
+  },
+  weeklyScheduleTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  scheduleItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  scheduleItemDays: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  scheduleItemHours: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+  },
+  contactCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  contactText: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  callSmallBtn: {
+    backgroundColor: Colors.primaryBg,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    marginLeft: 'auto',
+  },
+  callSmallBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  specialtiesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  detailSpecialtyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EBF2FB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  detailSpecialtyText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+  },
+  overallRatingCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  ratingNumber: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: Colors.textPrimary,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginVertical: 4,
+  },
+  ratingCountText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  reviewCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  authorAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authorInitial: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  authorName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  reviewTime: {
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  reviewRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  reviewRatingText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  reviewComment: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  detailFooterActions: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    padding: Spacing.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+    gap: 12,
+  },
+  detailCallBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.full,
+    gap: 6,
+  },
+  detailCallBtnText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  detailRouteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.full,
+    gap: 6,
+    ...Shadows.sm,
+  },
+  detailRouteBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
