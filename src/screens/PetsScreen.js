@@ -20,6 +20,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import HealthLogCard from '../components/HealthLogCard';
+import { generateImageFeatureVector } from '../utils/vectorSimilarity';
 
 const SPECIES_OPTIONS = [
   { label: 'Dog', icon: 'paw-outline', value: 'dog' },
@@ -135,7 +136,9 @@ function AddPetModal({ onClose, onAdd }) {
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
-    const frontPhoto = photos.find((p) => p.angle === 'front');
+    const frontPhoto = photos.find((p) => p.angle === 'front') || (photos.length > 0 ? photos[0] : null);
+    const photoSample = frontPhoto ? (frontPhoto.base64 || frontPhoto.uri) : form.name;
+    const petEmbedding = generateImageFeatureVector(photoSample);
 
     onAdd({
       id: `p_${Date.now()}`,
@@ -152,6 +155,7 @@ function AddPetModal({ onClose, onAdd }) {
       accentColor: colorPair.accent,
       referencePhotos: photos,
       primaryPhotoUri: frontPhoto ? frontPhoto.uri : null,
+      embedding: petEmbedding,
       accuracyScore: calculateAccuracyScore(photos),
     });
 

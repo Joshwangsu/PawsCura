@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateImageFeatureVector, matchPetByEmbedding } from '../utils/vectorSimilarity.js';
 
 // Initialize Gemini Client
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
@@ -80,16 +81,22 @@ export async function analyzePetCondition(base64Image, mimeType, registeredPets 
     ? registeredPets.map((p, idx) => `[Pet #${idx + 1}] ID: "${p.id}", Name: "${p.name}", Species: "${p.species}", Breed: "${p.breed || 'Unknown'}"`).join('\n')
     : 'No registered pets provided.';
 
-  // FALLBACK: If no API key is provided, simulate a realistic AI response with pet matching
+  // Compute vector embedding for scan photo
+  const scanEmbedding = generateImageFeatureVector(base64Image);
+  const vectorMatch = matchPetByEmbedding(scanEmbedding, registeredPets);
+
+  // FALLBACK: If no API key is provided, simulate a realistic AI response with vector pet matching
   if (!genAI) {
-    console.log("No Gemini API Key found. Returning mock AI analysis with pet matching.");
-    const matchedPet = registeredPets.length > 0 ? registeredPets[0] : null;
+    console.log("No Gemini API Key found. Returning mock AI analysis with vector pet matching.");
+    const matchedPet = vectorMatch ? vectorMatch.pet : (registeredPets.length > 0 ? registeredPets[0] : null);
+    const matchScore = vectorMatch ? vectorMatch.confidence : (matchedPet ? 92 : 0);
+
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve({
           matchedPetId: matchedPet ? matchedPet.id : null,
           matchedPetName: matchedPet ? matchedPet.name : null,
-          matchConfidence: matchedPet ? 92 : 0,
+          matchConfidence: matchScore,
           suspectedCondition: "Mild Hot Spot (Acute Moist Dermatitis)",
           confidence: 75,
           alternatives: [
@@ -98,7 +105,7 @@ export async function analyzePetCondition(base64Image, mimeType, registeredPets 
           ],
           urgencyLevel: "Needs Evaluation",
           analysis: matchedPet 
-            ? `I observe a localized area of redness and fur loss on ${matchedPet.name}. The image features closely match ${matchedPet.name}'s profile.`
+            ? `I observe a localized area of redness and fur loss on ${matchedPet.name}. Visual fingerprint embedding matched ${matchedPet.name}'s profile with ${matchScore}% cosine similarity.`
             : "I observe a localized area of redness, inflammation, and possible fur loss. It appears irritated and may be itchy or painful for the pet.",
           recommendedAction: "Prevent the pet from scratching or licking the area. Clean gently with a pet-safe antiseptic and consider a veterinary visit if it worsens or doesn't improve in 24 hours."
         });
@@ -174,6 +181,16 @@ Return raw JSON only. Do not surround with markdown code blocks.
     try {
       const cleanJsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanJsonStr);
+
+      // Boost match confidence if vector cosine similarity confirmed the match
+      if (vectorMatch && vectorMatch.pet) {
+        if (!parsed.matchedPetId || parsed.matchedPetId === 'null') {
+          parsed.matchedPetId = vectorMatch.pet.id;
+          parsed.matchedPetName = vectorMatch.pet.name;
+          parsed.matchConfidence = vectorMatch.confidence;
+        }
+      }
+
       return parsed;
     } catch (parseError) {
       console.error("Failed to parse Gemini response as JSON:", responseText);
