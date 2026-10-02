@@ -18,13 +18,13 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { chatWithVet } from '../services/gemini';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { doc, setDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 
 import { Modal } from 'react-native';
 
 export default function ChatbotScreen({ route, navigation }) {
-  const { initialContext } = route.params || {};
+  const { initialContext, scanRecordId } = route.params || {};
   const { user } = useAuth();
   const { isPremium } = useSubscription();
 
@@ -75,30 +75,37 @@ export default function ChatbotScreen({ route, navigation }) {
       });
 
       if (loadedSessions.length === 0) {
-        createNewSession(initialTitle);
+        createNewSession(initialTitle, scanRecordId);
       } else {
         setSessions(loadedSessions);
         if (!activeSessionId) {
-          // If initialContext provided, try to find existing past conversation or create new one for it
-          if (initialContext && initialContext.suspectedCondition) {
-            const targetTitle = formatSessionTitle(initialContext);
-            const matchedSess = loadedSessions.find((s) => s.title === targetTitle);
-            if (matchedSess) {
-              setActiveSessionId(matchedSess.id);
-              return;
+          if (scanRecordId) {
+            // --- SCAN-LINKED SESSION MATCHING ---
+            // A scanRecordId is present: look for a session that was already linked to this exact scan.
+            const linkedSess = loadedSessions.find((s) => s.scanRecordId === scanRecordId);
+            if (linkedSess) {
+              // Resume the existing session for this scan
+              setActiveSessionId(linkedSess.id);
             } else {
-              // Automatically create a new session for this assessment!
-              createNewSession(targetTitle);
-              return;
+              // First time opening chatbot for this scan — create a new dedicated session
+              createNewSession(initialTitle, scanRecordId);
             }
+            return;
           }
+
+          if (initialContext && initialContext.suspectedCondition) {
+            // No scanRecordId, but we have context — fallback: open most recent session
+            setActiveSessionId(loadedSessions[0].id);
+            return;
+          }
+
           setActiveSessionId(loadedSessions[0].id);
         }
       }
     });
 
     return () => unsubSessions();
-  }, [user, initialContext]);
+  }, [user, initialContext, scanRecordId]);
 
   // Handle messages subscription for activeSessionId for ALL users
   useEffect(() => {
@@ -140,7 +147,7 @@ export default function ChatbotScreen({ route, navigation }) {
     }, 100);
   }, [messages, isTyping]);
 
-  const createNewSession = async (customTitle) => {
+  const createNewSession = async (customTitle, linkedScanRecordId) => {
     if (!user) return;
     const sessId = `sess_${Date.now()}`;
     const newTitle = customTitle || (initialContext ? formatSessionTitle(initialContext) : `Pet - Consultation #${sessions.length + 1}`);
@@ -151,6 +158,8 @@ export default function ChatbotScreen({ route, navigation }) {
       title: newTitle,
       date: dateStr,
       updatedAt: serverTimestamp(),
+      // Link this chat session to the scan health record so we can resume it later
+      ...(linkedScanRecordId ? { scanRecordId: linkedScanRecordId } : {}),
     };
 
     try {
@@ -158,6 +167,19 @@ export default function ChatbotScreen({ route, navigation }) {
       setActiveSessionId(sessId);
       setActiveTab('chat');
       setShowHistoryModal(false);
+
+      // Write the chatSessionId back onto the health record so history/pet pages know
+      // which chat to open when "Ask Vet" is tapped from that specific scan record.
+      if (linkedScanRecordId) {
+        try {
+          await updateDoc(doc(db, 'healthRecords', linkedScanRecordId), {
+            chatSessionId: sessId,
+          });
+        } catch (linkErr) {
+          // Non-critical — the scanRecordId on the session is the primary link
+          console.warn('Could not write chatSessionId back to health record:', linkErr);
+        }
+      }
     } catch (err) {
       console.error('Error creating chat session:', err);
     }

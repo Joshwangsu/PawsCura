@@ -4,12 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
-export default function ClinicCard({ clinic, onPressDetails }) {
+export default function ClinicCard({ clinic, onNavigate, onPressDetails }) {
   const stars = Math.round(clinic.rating);
 
   return (
-    <TouchableOpacity 
-      style={styles.card} 
+    <TouchableOpacity
+      style={styles.card}
       activeOpacity={0.88}
       onPress={() => onPressDetails && onPressDetails(clinic)}
     >
@@ -17,7 +17,7 @@ export default function ClinicCard({ clinic, onPressDetails }) {
         {/* Header row */}
         <View style={styles.headerRow}>
           <View style={styles.iconBox}>
-            <Text style={styles.clinicEmoji}>{clinic.emoji}</Text>
+            <Text style={styles.clinicEmoji}>{clinic.emoji || '🏥'}</Text>
           </View>
 
           <View style={styles.titleBlock}>
@@ -50,16 +50,37 @@ export default function ClinicCard({ clinic, onPressDetails }) {
           <StatusBadge status={clinic.isOpen ? 'Open' : 'Closed'} size="sm" />
         </View>
 
-        {/* Hours & Details Button */}
+        {/* Hours & Action Buttons */}
         <View style={styles.footerRow}>
-          <Text style={styles.hours}>
+          <Text style={styles.hours} numberOfLines={1}>
             <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-            {'  '}{clinic.hours}
+            {'  '}{clinic.hours || 'Hours not listed'}
           </Text>
+        </View>
 
-          <View style={styles.detailsBtn}>
-            <Text style={styles.detailsBtnText}>View Details & Reviews →</Text>
-          </View>
+        {/* Action buttons */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.detailsBtn}
+            onPress={() => onPressDetails && onPressDetails(clinic)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="information-circle-outline" size={14} color={Colors.primary} />
+            <Text style={styles.detailsBtnText}>Details</Text>
+          </TouchableOpacity>
+
+          {clinic.coordinates &&
+            clinic.coordinates.latitude !== 0 &&
+            clinic.coordinates.longitude !== 0 && (
+              <TouchableOpacity
+                style={styles.navigateBtn}
+                onPress={() => onNavigate && onNavigate(clinic)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="navigate" size={14} color="#fff" />
+                <Text style={styles.navigateBtnText}>Navigate</Text>
+              </TouchableOpacity>
+            )}
         </View>
       </View>
     </TouchableOpacity>
@@ -140,36 +161,46 @@ const styles = StyleSheet.create({
   hours: {
     fontSize: 12,
     color: Colors.textSecondary,
+    flex: 1,
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  specialties: {
+  actionsRow: {
     flexDirection: 'row',
-    gap: 6,
-  },
-  specialtyChip: {
-    backgroundColor: Colors.primaryBg,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-  },
-  specialtyText: {
-    fontSize: 10,
-    color: Colors.primary,
-    fontWeight: '600',
+    gap: 8,
   },
   detailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.primaryBg,
+    flex: 1,
+    justifyContent: 'center',
   },
   detailsBtnText: {
     color: Colors.primary,
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  navigateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primary,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  navigateBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

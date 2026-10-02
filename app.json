@@ -8,7 +8,10 @@
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pawscura.app"
+      "bundleIdentifier": "com.pawscura.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAgT-OYRquR2SpMJoKjWX0_IwP3bEoGzzU"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +38,15 @@
           "image": "./assets/icon.png",
           "imageWidth": 200
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PawsCura needs your location to find veterinary clinics near you."
+        }
+      ],
+      "expo-font",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

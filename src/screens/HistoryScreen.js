@@ -339,6 +339,8 @@ export default function HistoryScreen({ navigation }) {
                       suspectedCondition: targetScan.issue,
                       analysis: targetScan.description,
                     },
+                    // Pass the health record ID so the chatbot can resume the linked session
+                    scanRecordId: targetScan.id || null,
                   });
                 }}
               >

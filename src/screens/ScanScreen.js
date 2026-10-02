@@ -9,10 +9,13 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useNavigation } from '@react-navigation/native';
 import { analyzePetCondition } from '../services/gemini';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
@@ -26,8 +29,152 @@ const SCAN_TIPS = [
   { icon: 'leaf-outline', text: 'Clean the area gently before scanning' },
 ];
 
+// Step definitions — Ionicons only, no emoji (Rule 3)
+const ANALYSIS_STEPS = [
+  { icon: 'cloud-upload-outline',    label: 'Uploading image' },
+  { icon: 'hardware-chip-outline',   label: 'Running AI analysis' },
+  { icon: 'paw-outline',             label: 'Matching your pet' },
+  { icon: 'document-text-outline',   label: 'Generating report' },
+];
+
+// Brand accent used in the loading modal (10% accent rule)
+const MODAL_ACCENT = '#63B3ED'; // blue-300 — visible against dark overlay
+const MODAL_ACCENT_DIM = 'rgba(99,179,237,0.18)'; // tinted surface, not same as border
+
+function ScanLoadingModal({ visible }) {
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim    = useRef(new Animated.Value(1)).current;
+  const fadeAnim     = useRef(new Animated.Value(0)).current;
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    // Fade in the whole modal
+    fadeAnim.setValue(0);
+    setStepIndex(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 280,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+
+    // Scan line: top → bottom sweep, reset, loop — 1.8 s period
+    const scanLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLineAnim, {
+          toValue: 1,
+          duration: 1800,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanLineAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    );
+    scanLoop.start();
+
+    // Subtle breathe pulse on the icon ring — scale 1 → 1.12, not exaggerated
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.12,
+          duration: 950,
+          easing: Easing.out(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 950,
+          easing: Easing.in(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseLoop.start();
+
+    // Advance step label every 1.4 s
+    const interval = setInterval(() => {
+      setStepIndex((prev) => (prev + 1) % ANALYSIS_STEPS.length);
+    }, 1400);
+
+    return () => {
+      scanLoop.stop();
+      pulseLoop.stop();
+      clearInterval(interval);
+    };
+  }, [visible]);
+
+  // Scan line translates 0 → 200 px (height of the scan box)
+  const translateY = scanLineAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 200],
+  });
+
+  const step = ANALYSIS_STEPS[stepIndex];
+
+  return (
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+      <Animated.View style={[scanModal.overlay, { opacity: fadeAnim }]}>
+
+        {/* ── Pulsing icon ring ─────────────────────────────────────── */}
+        {/* Rule 2: ring border (#63B3ED at 55% opacity) is visibly darker than
+            the tinted bg (rgba 18% same hue) — clear edge contrast */}
+        <Animated.View style={[scanModal.iconRing, { transform: [{ scale: pulseAnim }] }]}>
+          <Ionicons name="paw" size={40} color={MODAL_ACCENT} />
+        </Animated.View>
+
+        {/* ── Scan frame with sweep line ────────────────────────────── */}
+        {/* Not a nested card — it is a scan viewfinder frame (fundamentally
+            different content type: animated instrument, not a card) */}
+        <View style={scanModal.scanBox}>
+          {/* Corner brackets only — no solid border, no surface fill */}
+          <View style={[scanModal.corner, scanModal.cornerTL]} />
+          <View style={[scanModal.corner, scanModal.cornerTR]} />
+          <View style={[scanModal.corner, scanModal.cornerBL]} />
+          <View style={[scanModal.corner, scanModal.cornerBR]} />
+
+          {/* Sweep line — accent color only element on neutral surface */}
+          <Animated.View
+            style={[scanModal.scanLine, { transform: [{ translateY }] }]}
+          />
+
+          {/* Overline label — not em-dash, not emoji, just letterSpaced caps */}
+          <Text style={scanModal.scanBoxLabel}>SCANNING</Text>
+        </View>
+
+        {/* ── Step indicator ────────────────────────────────────────── */}
+        {/* Rule 3: Ionicons icon, not emoji. Rule 1: single-surface row,
+            tinted bg vs transparent overlay — distinct surface types */}
+        <View style={scanModal.stepRow}>
+          <View style={scanModal.stepIconBadge}>
+            <Ionicons name={step.icon} size={18} color={MODAL_ACCENT} />
+          </View>
+          <Text style={scanModal.stepLabel}>{step.label}</Text>
+        </View>
+
+        {/* ── Progress dots ─────────────────────────────────────────── */}
+        <View style={scanModal.dots}>
+          {ANALYSIS_STEPS.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                scanModal.dot,
+                i === stepIndex && scanModal.dotActive,
+              ]}
+            />
+          ))}
+        </View>
+
+        <Text style={scanModal.disclaimer}>AI-powered assessment in progress</Text>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+
 export default function ScanScreen() {
-  const { pets, healthLogs, addHealthLog } = useHealth();
+  const { pets, healthLogs, addHealthLog, updateHealthLog } = useHealth();
   const { isPremium, scanUsage, incrementScanCount } = useSubscription();
   const navigation = useNavigation();
   const [imageUri, setImageUri] = useState(null);
@@ -36,6 +183,11 @@ export default function ScanScreen() {
   const [result, setResult] = useState(null);
   const [showPetModal, setShowPetModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  // Track auto-save progress: null | 'saving' | 'saved' | 'error'
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null);
+  const [autoSavedPetName, setAutoSavedPetName] = useState(null);
+  // ID of the Firestore health record created for this scan — used for chatbot session linking
+  const [autoSavedRecordId, setAutoSavedRecordId] = useState(null);
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
@@ -51,40 +203,46 @@ export default function ScanScreen() {
     const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
     if (!cloudName || !uploadPreset) {
-      console.warn("Cloudinary configuration missing! Check .env variables.");
-      return uri;
+      console.warn('Cloudinary config missing. Check EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET in .env');
+      return null;
     }
 
-    const data = new FormData();
-    const mimeType = uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
-
-    data.append('file', {
-      uri: uri,
-      type: mimeType,
-      name: `upload_${Date.now()}.${uri.endsWith('.png') ? 'png' : 'jpg'}`,
-    });
-    data.append('upload_preset', uploadPreset);
-    data.append('cloud_name', cloudName);
-
     try {
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: 'POST',
-        body: data,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'multipart/form-data',
-        },
+      // Read the local file as base64 using expo-file-system.
+      // This is the ONLY reliable upload path in Expo — the FormData object
+      // approach throws "Unsupported FormDataPart implementation" on iOS/Android.
+      const mimeType = uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+      const base64Data = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
+
+      // Cloudinary accepts a base64 data URI in the `file` field
+      const dataUri = `data:${mimeType};base64,${base64Data}`;
+
+      const body = new FormData();
+      body.append('file', dataUri);
+      body.append('upload_preset', uploadPreset);
+      body.append('cloud_name', cloudName);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body,
+          // Do NOT set Content-Type — let fetch set it with the correct boundary
+          headers: { Accept: 'application/json' },
+        }
+      );
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Cloudinary upload failed: ${errText}`);
+        throw new Error(`Cloudinary rejected the upload: ${errText}`);
       }
 
-      const responseData = await response.json();
-      return responseData.secure_url;
+      const json = await response.json();
+      return json.secure_url ?? null;
     } catch (error) {
-      console.error("Cloudinary upload error:", error);
+      console.error('Cloudinary upload error:', error);
       throw error;
     }
   };
@@ -115,6 +273,9 @@ export default function ScanScreen() {
         const asset = pickerResult.assets[0];
         setImageUri(asset.uri);
         setResult(null); // Clear old results
+        setAutoSaveStatus(null);
+        setAutoSavedPetName(null);
+        setAutoSavedRecordId(null); // Reset scan record link
         
         // Convert to proper mime type and analyze
         const mimeType = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
@@ -125,15 +286,19 @@ export default function ScanScreen() {
           setResult(analysisResult);
           incrementScanCount();
 
-          // Auto-record to pet's medical history immediately
-          const targetPet = analysisResult.matchedPetId
-            ? pets.find((p) => p.id === analysisResult.matchedPetId)
-            : (pets.length > 0 ? pets[0] : null);
+          // Auto-record to pet's medical history immediately after scan
+          // Priority: AI-matched pet ID > first pet in list
+          const targetPet = (analysisResult.matchedPetId && pets.find((p) => p.id === analysisResult.matchedPetId))
+            || (pets.length > 0 ? pets[0] : null);
 
           if (targetPet) {
             autoSaveToPetRecord(analysisResult, targetPet, asset.uri);
+          } else if (pets.length === 0) {
+            // No pets registered yet — prompt user
+            setAutoSaveStatus('no_pets');
           }
         } catch (error) {
+          console.error('Scan error:', error);
           alert("Failed to analyze image. Please try again.");
         } finally {
           setLoading(false);
@@ -146,37 +311,53 @@ export default function ScanScreen() {
   };
 
   const autoSaveToPetRecord = async (analysis, pet, localUri) => {
+    setAutoSaveStatus('saving');
+    setAutoSavedPetName(pet.name);
     try {
-      let finalImageUrl = null;
-      if (localUri) {
-        finalImageUrl = await uploadToCloudinary(localUri);
-      }
-
-      const newLog = {
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      // Step 1: Save the record to Firestore immediately (no image yet)
+      const logPayload = {
         petId: pet.id,
         petName: pet.name,
         petIcon: pet.icon || 'paw',
-        breed: pet.breed,
-        issue: analysis.suspectedCondition,
-        description: analysis.analysis,
-        status: analysis.urgencyLevel,
+        breed: pet.breed || '',
+        issue: analysis.suspectedCondition || 'Unspecified Condition',
+        description: analysis.analysis || '',
+        status: analysis.urgencyLevel || 'Needs Evaluation',
+        recommendedAction: analysis.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
-        imageUrl: finalImageUrl,
+        imageUrl: null, // will be updated after upload
         autoRecorded: true,
+        confidence: analysis.confidence || null,
+        alternatives: analysis.alternatives || [],
       };
 
-      await addHealthLog(newLog);
+      const docRef = await addHealthLog(logPayload);
+      setAutoSaveStatus('saved');
+      // Store the health record ID so chatbot can link to this specific scan
+      if (docRef?.id) setAutoSavedRecordId(docRef.id);
+
+      // Step 2: Asynchronously upload image and update the record
+      if (localUri && docRef?.id) {
+        try {
+          const cloudUrl = await uploadToCloudinary(localUri);
+          if (cloudUrl) {
+            await updateHealthLog(docRef.id, { imageUrl: cloudUrl });
+          }
+        } catch (imgErr) {
+          // Image upload failed but record is already saved — not critical
+          console.warn('Image upload failed after auto-save (record still saved):', imgErr);
+        }
+      }
     } catch (err) {
-      console.error("Auto-save error:", err);
+      console.error('Auto-save error:', err);
+      setAutoSaveStatus('error');
     }
   };
 
-  const matchedPet = result?.matchedPetId ? pets.find((p) => p.id === result.matchedPetId) : (pets.length > 0 ? pets[0] : null);
 
   const handleSaveToRecords = async (targetPet) => {
-    const petToSave = targetPet || matchedPet || (pets.length > 0 ? pets[0] : null);
+    const petToSave = targetPet || (pets.length > 0 ? pets[0] : null);
     if (!result || !petToSave) {
       setShowPetModal(true);
       return;
@@ -184,36 +365,49 @@ export default function ScanScreen() {
     
     setSaving(true);
     try {
-      let finalImageUrl = null;
-      if (imageUri) {
-        finalImageUrl = await uploadToCloudinary(imageUri);
-      }
-
-      // Create new health log object
-      const newLog = {
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      // Save immediately without waiting for image upload
+      const logPayload = {
         petId: petToSave.id,
         petName: petToSave.name,
         petIcon: petToSave.icon || 'paw',
-        breed: petToSave.breed,
-        issue: result.suspectedCondition,
-        description: result.analysis,
-        status: result.urgencyLevel,
+        breed: petToSave.breed || '',
+        issue: result.suspectedCondition || 'Unspecified Condition',
+        description: result.analysis || '',
+        status: result.urgencyLevel || 'Needs Evaluation',
+        recommendedAction: result.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
-        imageUrl: finalImageUrl
+        imageUrl: null,
+        autoRecorded: false,
+        confidence: result.confidence || null,
+        alternatives: result.alternatives || [],
       };
       
-      await addHealthLog(newLog);
+      const docRef = await addHealthLog(logPayload);
+      setAutoSavedPetName(petToSave.name);
+      setAutoSaveStatus('saved');
       setShowPetModal(false);
       setShowSuccessModal(true);
+
+      // Async image upload after save
+      if (imageUri && docRef?.id) {
+        try {
+          const cloudUrl = await uploadToCloudinary(imageUri);
+          if (cloudUrl) {
+            await updateHealthLog(docRef.id, { imageUrl: cloudUrl });
+          }
+        } catch (imgErr) {
+          console.warn('Image upload failed (record still saved):', imgErr);
+        }
+      }
     } catch (error) {
-      console.error(error);
-      alert("Could not upload assessment photo to Cloudinary. Please check your internet connection.");
+      console.error('Save to records error:', error);
+      Alert.alert('Save Failed', 'Could not save the record. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }
   };
+
 
   const getUrgencyColor = (urgency) => {
     switch (urgency?.toLowerCase()) {
@@ -225,6 +419,8 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.safe}>
+      {/* Full-screen AI scan animation */}
+      <ScanLoadingModal visible={loading} />
       <ScrollView ref={scrollViewRef} style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient
@@ -248,12 +444,6 @@ export default function ScanScreen() {
           {imageUri ? (
             <View style={styles.imagePreviewContainer}>
               <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-              {loading && (
-                <View style={styles.loadingOverlay}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={styles.loadingText}>AI Matching & Analyzing...</Text>
-                </View>
-              )}
             </View>
           ) : (
             <TouchableOpacity 
@@ -286,33 +476,62 @@ export default function ScanScreen() {
               <Text style={styles.resultTitle}>AI Assessment Complete</Text>
             </View>
 
-            {/* Matched Pet Auto-Identification & Auto-Record Banner */}
-            {matchedPet ? (
+            {/* Auto-Save Status Banner — driven by real Firestore save state */}
+            {autoSaveStatus === 'saving' && (
+              <View style={styles.autoSavingBanner}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.matchedLabel}>Saving to Medical History…</Text>
+                  <Text style={styles.matchedPetName} numberOfLines={1}>
+                    Recording for {autoSavedPetName || 'your pet'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {autoSaveStatus === 'saved' && (
               <View style={styles.autoMatchedBanner}>
                 <View style={styles.matchedLeft}>
                   <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.matchedLabel}>Auto-Recorded to Medical History</Text>
+                    <Text style={styles.matchedLabel}>✓ Auto-Recorded to Medical History</Text>
                     <Text style={styles.matchedPetName} numberOfLines={1}>
-                      {matchedPet.name} ({matchedPet.breed}) • {result.matchConfidence || 92}% Match
+                      Saved under {autoSavedPetName || 'your pet'} • Tap to view
                     </Text>
                   </View>
                 </View>
                 <TouchableOpacity
-                  onPress={() => setShowPetModal(true)}
+                  onPress={() => navigation.navigate('Pets')}
                   style={styles.changePetBtn}
                   activeOpacity={0.75}
                 >
-                  <Text style={styles.changePetText}>Reassign</Text>
+                  <Text style={styles.changePetText}>View</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
-              <TouchableOpacity onPress={() => setShowPetModal(true)} style={styles.unmatchedBanner}>
+            )}
+
+            {autoSaveStatus === 'error' && (
+              <TouchableOpacity
+                onPress={() => setShowPetModal(true)}
+                style={styles.unmatchedBanner}
+              >
                 <Ionicons name="alert-circle-outline" size={16} color={Colors.warning} />
-                <Text style={styles.unmatchedText}>Select pet profile to attach this record</Text>
+                <Text style={styles.unmatchedText}>Auto-save failed — tap to assign pet manually</Text>
                 <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
               </TouchableOpacity>
             )}
+
+            {autoSaveStatus === 'no_pets' && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Pets')}
+                style={styles.unmatchedBanner}
+              >
+                <Ionicons name="paw-outline" size={16} color={Colors.warning} />
+                <Text style={styles.unmatchedText}>No pets registered — tap to add a pet first</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+
 
             <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(result.urgencyLevel) }]}>
               <Text style={styles.urgencyText}>{result.urgencyLevel}</Text>
@@ -380,9 +599,11 @@ export default function ScanScreen() {
                 onPress={() => navigation.navigate('Chatbot', {
                   initialContext: {
                     ...result,
-                    petName: matchedPet ? matchedPet.name : result.matchedPetName || 'Pet',
-                    matchedPetName: matchedPet ? matchedPet.name : result.matchedPetName || 'Pet',
-                  }
+                    petName: autoSavedPetName || result.matchedPetName || 'Pet',
+                    matchedPetName: autoSavedPetName || result.matchedPetName || 'Pet',
+                  },
+                  // Pass the health record ID so the chatbot can link/resume the right session
+                  scanRecordId: autoSavedRecordId || null,
                 })}
                 activeOpacity={0.85}
               >
@@ -739,16 +960,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textPrimary,
   },
-  autoMatchedBanner: {
+  autoSavingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#EBF2FB',
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#93C5FD',
+    borderColor: '#BFDBFE',
+    gap: 10,
+  },
+  autoMatchedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
     gap: 8,
   },
   matchedLeft: {
@@ -761,13 +993,13 @@ const styles = StyleSheet.create({
   matchedLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: '#065F46',
     textTransform: 'uppercase',
   },
   matchedPetName: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.primaryDark,
+    color: '#047857',
   },
   changePetBtn: {
     backgroundColor: Colors.card,
@@ -1206,3 +1438,152 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 });
+
+// ─── Scan Loading Modal Styles ──────────────────────────────────────────────
+// Follows Anti-Generic UI policy v2.0:
+//   Rule 1: No nested same-surface cards
+//   Rule 2: All borders are visibly darker than their backgrounds
+//   Rule 3: No emoji — Ionicons throughout
+//   Rule 5: 60-30-10 — dark overlay (60%), tinted badge surface (30%), accent blue (10%)
+const SCAN_CORNER = 20; // corner bracket px
+const SCAN_THICK  = 3;  // corner bracket stroke
+
+const scanModal = StyleSheet.create({
+  // 60% — dark translucent canvas
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(4, 12, 28, 0.97)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 22,
+  },
+
+  // 30% — tinted ring surface.
+  // bg: rgba(99,179,237,0.12)  →  border: rgba(99,179,237,0.55)
+  // Delta ~43% — clearly visible edge (Rule 2 satisfied)
+  iconRing: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: 'rgba(99,179,237,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(99,179,237,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Scan viewfinder frame — NOT a card, no background fill
+  // Pure corner-bracket instrument (Rule 1: fundamentally different content type)
+  scanBox: {
+    width: 200,
+    height: 200,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  corner: {
+    position: 'absolute',
+    width: SCAN_CORNER,
+    height: SCAN_CORNER,
+    borderColor: '#63B3ED',  // 10% accent — only element at full saturation
+  },
+  cornerTL: {
+    top: 0, left: 0,
+    borderTopWidth: SCAN_THICK,
+    borderLeftWidth: SCAN_THICK,
+    borderTopLeftRadius: 4,
+  },
+  cornerTR: {
+    top: 0, right: 0,
+    borderTopWidth: SCAN_THICK,
+    borderRightWidth: SCAN_THICK,
+    borderTopRightRadius: 4,
+  },
+  cornerBL: {
+    bottom: 0, left: 0,
+    borderBottomWidth: SCAN_THICK,
+    borderLeftWidth: SCAN_THICK,
+    borderBottomLeftRadius: 4,
+  },
+  cornerBR: {
+    bottom: 0, right: 0,
+    borderBottomWidth: SCAN_THICK,
+    borderRightWidth: SCAN_THICK,
+    borderBottomRightRadius: 4,
+  },
+
+  // 10% accent — the sweep line is the single high-saturation element
+  scanLine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 2,
+    backgroundColor: '#63B3ED',
+    // Soft glow — kept subtle (Rule 8: not rgba(0,0,0,0.4) style heavy)
+    shadowColor: '#63B3ED',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+
+  // Overline label inside scan frame — letterSpaced caps, muted accent tint
+  scanBoxLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: 'rgba(99,179,237,0.55)',
+    letterSpacing: 5,
+  },
+
+  // Step row: icon badge + label side by side — single-surface, not nested cards
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  // Rule 1: stepIconBadge is a pill, not a card — its content type (icon badge)
+  // is distinct from the overlay surface (fullscreen dark canvas)
+  // Rule 2: bg rgba(99,179,237,0.15) vs border rgba(99,179,237,0.45) — clear contrast
+  stepIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(99,179,237,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,179,237,0.40)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.90)',
+    letterSpacing: 0.2,
+  },
+
+  // Progress dots — neutral resting, accent active (10% rule)
+  dots: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  dotActive: {
+    backgroundColor: '#63B3ED',  // full accent — only active dot
+    width: 18,
+    borderRadius: 3,
+  },
+
+  // Muted helper text — not em-dash, no ellipsis punctuation
+  disclaimer: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.30)',
+    letterSpacing: 0.1,
+  },
+});
+

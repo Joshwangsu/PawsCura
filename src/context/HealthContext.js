@@ -73,6 +73,15 @@ export const HealthProvider = ({ children }) => {
     }
   };
 
+  const updateHealthLog = async (logId, updatedFields) => {
+    if (!user || !logId) return;
+    try {
+      await updateDoc(doc(db, 'healthRecords', logId), updatedFields);
+    } catch (error) {
+      console.error("Error updating health record: ", error);
+    }
+  };
+
   const addPet = async (newPet) => {
     if (!user) return;
     try {
@@ -131,7 +140,7 @@ export const HealthProvider = ({ children }) => {
   };
 
   return (
-    <HealthContext.Provider value={{ pets, healthLogs, addHealthLog, addPet, deletePet, updatePet }}>
+    <HealthContext.Provider value={{ pets, healthLogs, addHealthLog, updateHealthLog, addPet, deletePet, updatePet }}>
       {children}
     </HealthContext.Provider>
   );

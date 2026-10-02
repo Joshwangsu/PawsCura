@@ -84,14 +84,17 @@ function formatGoogleResponse(results, userLat, userLon) {
     const clinicLat = place.geometry?.location?.lat || 0;
     const clinicLon = place.geometry?.location?.lng || 0;
     const distanceKm = calculateDistance(userLat, userLon, clinicLat, clinicLon);
-    
+
+    // Determine open status from Google Places response
+    const isOpen = place.opening_hours?.open_now ?? false;
+
     const sampleReviews = [
       {
         id: 'r1',
         author: 'Maria Santos',
         rating: 5,
         time: '2 days ago',
-        text: 'The vets here are so compassionate and attentive! They diagnosed my dog’s skin allergy right away.',
+        text: "The vets here are so compassionate and attentive! They diagnosed my dog's skin allergy right away.",
       },
       {
         id: 'r2',
@@ -115,9 +118,10 @@ function formatGoogleResponse(results, userLat, userLon) {
       emoji: '🏥',
       address: place.vicinity || 'Address unavailable',
       distance: `${distanceKm.toFixed(1)} km away`,
+      distanceKm,
       rating: place.rating || 4.7,
       reviewCount: place.user_ratings_total || 48,
-      isOpen: isOpen,
+      isOpen,
       hours: isOpen ? '8:00 AM - 7:00 PM' : 'Closed now (Opens 8:00 AM)',
       openDays: 'Mon - Sat',
       phone: '+63 2 8920 1234',

@@ -107,10 +107,16 @@ export default function HealthLogCard({ log, onPress }) {
             onPress={() => {
               const ctx = {
                 suspectedCondition: log.issue,
-                analysis: log.description
+                analysis: log.description,
+                petName: log.petName,
+                matchedPetName: log.petName,
               };
               setShowModal(false);
-              navigation.navigate('Chatbot', { initialContext: ctx });
+              navigation.navigate('Chatbot', {
+                initialContext: ctx,
+                // Pass the health record ID so the chatbot can resume the linked session
+                scanRecordId: log.id || null,
+              });
             }}
           >
             <Ionicons name="chatbubbles" size={18} color="#fff" />

@@ -939,6 +939,7 @@ export default function PetsScreen() {
               <View style={styles.historyHeader}>
                 <Ionicons name="medical-outline" size={20} color={Colors.primary} />
                 <Text style={styles.historySectionLabel}>Medical Scan History</Text>
+                <View style={{ flex: 1 }} />
                 <View style={styles.historyBadge}>
                   <Text style={styles.historyBadgeText}>
                     {healthLogs.filter(log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase()).length} records
@@ -946,28 +947,65 @@ export default function PetsScreen() {
                 </View>
               </View>
 
-              {healthLogs.filter(log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase()).length === 0 ? (
-                <View style={styles.emptyLogsCard}>
-                  <Ionicons name="document-text-outline" size={32} color={Colors.textMuted} />
-                  <Text style={styles.emptyLogsText}>No diagnostics records on file for {activePet?.name}.</Text>
-                  <TouchableOpacity
-                    style={styles.emptyLogsScanBtn}
-                    onPress={() => navigation.navigate('Scan')}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.emptyLogsScanBtnText}>Run AI Diagnostic Scan</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                healthLogs
-                  .filter(log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase())
-                  .map((log) => (
-                    <View key={log.id} style={{ marginBottom: Spacing.sm }}>
-                      <HealthLogCard log={log} />
+              {(() => {
+                const petLogs = healthLogs.filter(
+                  log => log.petId === activePet?.id || log.petName?.toLowerCase() === activePet?.name?.toLowerCase()
+                );
+                if (petLogs.length === 0) {
+                  return (
+                    <View style={styles.emptyLogsCard}>
+                      <Ionicons name="scan-outline" size={32} color={Colors.textMuted} />
+                      <Text style={styles.emptyLogsText}>No AI scan records for {activePet?.name} yet.</Text>
+                      <TouchableOpacity
+                        style={styles.emptyLogsScanBtn}
+                        onPress={() => navigation.navigate('Scan')}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.emptyLogsScanBtnText}>Run AI Diagnostic Scan</Text>
+                      </TouchableOpacity>
                     </View>
-                  ))
-              )}
+                  );
+                }
+                const displayLogs = petLogs.slice(0, 5);
+                const hasMore = petLogs.length > 5;
+                return (
+                  <>
+                    {displayLogs.map((log) => (
+                      <View key={log.id} style={{ marginBottom: Spacing.sm }}>
+                        <HealthLogCard log={log} />
+                      </View>
+                    ))}
+                    {hasMore && (
+                      <TouchableOpacity
+                        style={styles.viewAllRecordsBtn}
+                        onPress={() => navigation.navigate('History')}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="list-outline" size={16} color={Colors.primary} />
+                        <Text style={styles.viewAllRecordsBtnText}>
+                          View All {petLogs.length} Records in History
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                    {!hasMore && petLogs.length > 0 && (
+                      <TouchableOpacity
+                        style={styles.viewAllRecordsBtn}
+                        onPress={() => navigation.navigate('History')}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                        <Text style={[styles.viewAllRecordsBtnText, { color: Colors.textSecondary }]}>
+                          View Full History Timeline
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </>
+                );
+              })()}
             </View>
+
           </>
         )}
       </ScrollView>
@@ -1761,5 +1799,24 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
     borderColor: Colors.border,
+  },
+  viewAllRecordsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+    marginHorizontal: Spacing.md,
+    marginTop: 4,
+    marginBottom: Spacing.sm,
+  },
+  viewAllRecordsBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 });

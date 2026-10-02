@@ -21,7 +21,8 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 export default function SignupScreen({ navigation }) {
   const { reloadUser } = useAuth();
   const [form, setForm] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -30,17 +31,76 @@ export default function SignupScreen({ navigation }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [passwordStrength, setPasswordStrength] = useState(0);
 
-  const updateForm = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateForm = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    // Clear the error for this field as the user types
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+    // Update password strength live
+    if (field === 'password') {
+      setPasswordStrength(getPasswordStrength(value));
+    }
+  };
+
+  const getPasswordStrength = (pwd) => {
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    return score;
+  };
+
+  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const strengthColors = ['#e0e0e0', '#EF4444', '#F97316', '#EAB308', '#22C55E'];
 
   const validate = () => {
     const errs = {};
-    if (!form.name.trim()) errs.name = 'Full name is required';
-    if (!form.email.trim()) errs.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Enter a valid email';
-    if (!form.password) errs.password = 'Password is required';
-    else if (form.password.length < 6) errs.password = 'Must be at least 6 characters';
-    if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match';
+    // First name: required + letters only
+    if (!form.firstName.trim()) {
+      errs.firstName = 'First name is required';
+    } else if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'-]+$/.test(form.firstName.trim())) {
+      errs.firstName = 'First name must contain letters only';
+    } else if (form.firstName.trim().length < 2) {
+      errs.firstName = 'First name must be at least 2 characters';
+    }
+    // Last name: required + letters only
+    if (!form.lastName.trim()) {
+      errs.lastName = 'Last name is required';
+    } else if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'-]+$/.test(form.lastName.trim())) {
+      errs.lastName = 'Last name must contain letters only';
+    } else if (form.lastName.trim().length < 2) {
+      errs.lastName = 'Last name must be at least 2 characters';
+    }
+    // Email
+    if (!form.email.trim()) {
+      errs.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errs.email = 'Enter a valid email address';
+    }
+    // Password: required + strong rules
+    if (!form.password) {
+      errs.password = 'Password is required';
+    } else if (form.password.length < 8) {
+      errs.password = 'Password must be at least 8 characters';
+    } else if (!/[A-Z]/.test(form.password)) {
+      errs.password = 'Must include at least one uppercase letter';
+    } else if (!/[a-z]/.test(form.password)) {
+      errs.password = 'Must include at least one lowercase letter';
+    } else if (!/[0-9]/.test(form.password)) {
+      errs.password = 'Must include at least one number';
+    } else if (!/[^A-Za-z0-9]/.test(form.password)) {
+      errs.password = 'Must include at least one special character (!@#$...)';
+    }
+    // Confirm password
+    if (!form.confirmPassword) {
+      errs.confirmPassword = 'Please confirm your password';
+    } else if (form.password !== form.confirmPassword) {
+      errs.confirmPassword = 'Passwords do not match';
+    }
     return errs;
   };
 
@@ -56,12 +116,11 @@ export default function SignupScreen({ navigation }) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
       
-      // Optionally update the user's display name
-      if (form.name) {
-        await updateProfile(userCredential.user, {
-          displayName: form.name
-        });
-      }
+      // Update the user's display name with first + last name
+      const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
+      await updateProfile(userCredential.user, {
+        displayName: fullName
+      });
 
       // Immediately sign them out so they aren't auto-logged in
       await signOut(auth);
@@ -88,15 +147,22 @@ export default function SignupScreen({ navigation }) {
     }
   };
 
-  const FIELDS = [
+  const NAME_FIELDS = [
     {
-      key: 'name',
-      label: 'Full Name',
+      key: 'firstName',
+      label: 'First Name',
       icon: 'person-outline',
-      placeholder: 'Alex Johnson',
-      keyboard: 'default',
-      secure: false,
+      placeholder: 'Alex',
     },
+    {
+      key: 'lastName',
+      label: 'Last Name',
+      icon: 'person-outline',
+      placeholder: 'Johnson',
+    },
+  ];
+
+  const FIELDS = [
     {
       key: 'email',
       label: 'Email Address',
@@ -158,7 +224,42 @@ export default function SignupScreen({ navigation }) {
               </View>
             )}
 
-            {/* Fields */}
+            {/* First Name & Last Name side by side */}
+            <View style={styles.nameRow}>
+              {NAME_FIELDS.map((field) => (
+                <View style={[styles.fieldGroup, styles.nameField]} key={field.key}>
+                  <Text style={styles.label}>{field.label}</Text>
+                  <View
+                    style={[
+                      styles.inputRow,
+                      errors[field.key] && styles.inputError,
+                    ]}
+                  >
+                    <Ionicons
+                      name={field.icon}
+                      size={18}
+                      color={Colors.textMuted}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={field.placeholder}
+                      placeholderTextColor={Colors.textMuted}
+                      value={form[field.key]}
+                      onChangeText={(v) => updateForm(field.key, v)}
+                      keyboardType="default"
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  {errors[field.key] && (
+                    <Text style={styles.errorText}>{errors[field.key]}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+
+            {/* Other Fields */}
             {FIELDS.map((field) => {
               const isSecure = field.secure
                 ? field.toggleKey === 'showPassword'
@@ -194,7 +295,7 @@ export default function SignupScreen({ navigation }) {
                       value={form[field.key]}
                       onChangeText={(v) => updateForm(field.key, v)}
                       keyboardType={field.keyboard}
-                      autoCapitalize={field.key === 'name' ? 'words' : 'none'}
+                      autoCapitalize="none"
                       autoCorrect={false}
                       secureTextEntry={isSecure}
                     />
@@ -209,7 +310,67 @@ export default function SignupScreen({ navigation }) {
                     )}
                   </View>
                   {errors[field.key] && (
-                    <Text style={styles.errorText}>{errors[field.key]}</Text>
+                    <View style={styles.errorRow}>
+                      <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+                      <Text style={styles.errorText}>{errors[field.key]}</Text>
+                    </View>
+                  )}
+                  {/* Password strength meter */}
+                  {field.key === 'password' && form.password.length > 0 && (
+                    <View style={styles.strengthContainer}>
+                      <View style={styles.strengthBars}>
+                        {[1, 2, 3, 4].map((bar) => (
+                          <View
+                            key={bar}
+                            style={[
+                              styles.strengthBar,
+                              {
+                                backgroundColor:
+                                  passwordStrength >= bar
+                                    ? strengthColors[passwordStrength]
+                                    : '#E5E7EB',
+                              },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                      <Text
+                        style={[
+                          styles.strengthLabel,
+                          { color: strengthColors[passwordStrength] },
+                        ]}
+                      >
+                        {strengthLabel[passwordStrength]}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Password requirement hints */}
+                  {field.key === 'password' && form.password.length > 0 && (
+                    <View style={styles.hintBox}>
+                      {[
+                        { rule: form.password.length >= 8, text: 'At least 8 characters' },
+                        { rule: /[A-Z]/.test(form.password), text: 'One uppercase letter' },
+                        { rule: /[a-z]/.test(form.password), text: 'One lowercase letter' },
+                        { rule: /[0-9]/.test(form.password), text: 'One number' },
+                        { rule: /[^A-Za-z0-9]/.test(form.password), text: 'One special character' },
+                      ].map((item, i) => (
+                        <View key={i} style={styles.hintRow}>
+                          <Ionicons
+                            name={item.rule ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={13}
+                            color={item.rule ? '#22C55E' : Colors.textMuted}
+                          />
+                          <Text
+                            style={[
+                              styles.hintText,
+                              { color: item.rule ? '#22C55E' : Colors.textMuted },
+                            ]}
+                          >
+                            {item.text}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   )}
                 </View>
               );
@@ -326,6 +487,14 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontWeight: '600',
   },
+  nameRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 0,
+  },
+  nameField: {
+    flex: 1,
+  },
   fieldGroup: {
     marginBottom: Spacing.md,
   },
@@ -359,11 +528,55 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 4,
   },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
   errorText: {
     fontSize: 12,
     color: Colors.danger,
-    marginTop: 4,
     marginLeft: 2,
+    flex: 1,
+  },
+  strengthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  strengthBars: {
+    flexDirection: 'row',
+    gap: 4,
+    flex: 1,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  strengthLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    minWidth: 36,
+    textAlign: 'right',
+  },
+  hintBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 6,
+    gap: 4,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  hintText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   termsRow: {
     flexDirection: 'row',
