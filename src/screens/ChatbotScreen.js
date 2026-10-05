@@ -28,7 +28,7 @@ export default function ChatbotScreen({ route, navigation }) {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
 
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'history'
+  const [activeTab, setActiveTab] = useState((initialContext || scanRecordId) ? 'chat' : 'history'); // 'chat' | 'history'
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [messages, setMessages] = useState([]);

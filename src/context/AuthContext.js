@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../services/firebaseConfig';
 
@@ -9,10 +9,14 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isSigningUpRef = useRef(false);
 
   useEffect(() => {
     // Listen for Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (isSigningUpRef.current) {
+        return;
+      }
       setUser(currentUser);
       setLoading(false);
     });
@@ -28,8 +32,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const setIsSigningUp = (value) => {
+    isSigningUpRef.current = value;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, reloadUser }}>
+    <AuthContext.Provider value={{ user, loading, reloadUser, setIsSigningUp }}>
       {children}
     </AuthContext.Provider>
   );

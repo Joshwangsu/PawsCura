@@ -10,10 +10,11 @@ import {
   Platform,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../services/firebaseConfig';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
@@ -55,6 +56,26 @@ export default function LoginScreen({ navigation }) {
       setErrors({ form: errorMsg });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setErrors({ ...errors, email: 'Enter your email to reset password' });
+      return;
+    }
+    
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      Alert.alert('Reset Email Sent', 'Check your inbox for further instructions.');
+    } catch (error) {
+      let errorMsg = 'Failed to send reset email.';
+      if (error.code === 'auth/user-not-found') {
+        errorMsg = 'No account found with this email.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Invalid email address.';
+      }
+      Alert.alert('Error', errorMsg);
     }
   };
 
@@ -144,7 +165,7 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             {/* Forgot password */}
-            <TouchableOpacity style={styles.forgotRow}>
+            <TouchableOpacity style={styles.forgotRow} onPress={handleForgotPassword}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
 

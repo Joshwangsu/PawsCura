@@ -19,7 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
 export default function SignupScreen({ navigation }) {
-  const { reloadUser } = useAuth();
+  const { reloadUser, setIsSigningUp } = useAuth();
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -112,6 +112,7 @@ export default function SignupScreen({ navigation }) {
     }
     setErrors({});
     setIsLoading(true);
+    setIsSigningUp(true);
     
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
@@ -144,6 +145,7 @@ export default function SignupScreen({ navigation }) {
       setErrors({ form: errorMsg });
     } finally {
       setIsLoading(false);
+      setIsSigningUp(false);
     }
   };
 
