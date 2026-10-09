@@ -23,13 +23,26 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 export default function HomeScreen({ navigation }) {
   const { pets, healthLogs } = useHealth();
   const { user } = useAuth();
-  const { isPremium } = useSubscription();
+  const { isPremium, userData } = useSubscription();
   
   const [selectedPet, setSelectedPet] = useState(pets.length > 0 ? pets[0].id : null);
   const recentLogs = healthLogs.slice(0, 2);
   
-  const displayName = user?.displayName || 'User';
-  const initial = displayName.charAt(0).toUpperCase();
+  const firstName = userData?.firstName || (user?.displayName ? user.displayName.split(' ')[0] : 'User');
+  const lastName = userData?.lastName || (user?.displayName && user.displayName.includes(' ') ? user.displayName.split(' ').slice(1).join(' ') : '');
+  const fullName = firstName && lastName ? `${firstName} ${lastName}` : (user?.displayName || firstName || 'User');
+
+  const getInitials = () => {
+    const f = (userData?.firstName || (user?.displayName ? user.displayName.split(' ')[0] : '')).trim();
+    const l = (userData?.lastName || (user?.displayName && user.displayName.includes(' ') ? user.displayName.split(' ').slice(1).join(' ') : '')).trim();
+    if (f && l) {
+      return `${f[0]}${l[0]}`.toUpperCase();
+    }
+    if (f) return f[0].toUpperCase();
+    if (user?.displayName) return user.displayName[0].toUpperCase();
+    return 'U';
+  };
+  const initials = getInitials();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -65,7 +78,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.headerInner}>
             <View style={styles.headerLeft}>
               <Text style={styles.greetingLabel}>{getGreeting()}</Text>
-              <Text style={styles.greetingName} numberOfLines={1}>Hello, {displayName}</Text>
+              <Text style={styles.greetingName} numberOfLines={1}>Hello, {fullName}</Text>
               <Text style={styles.greetingSubtext} numberOfLines={1}>How are your pets today?</Text>
             </View>
 
@@ -82,7 +95,7 @@ export default function HomeScreen({ navigation }) {
               {/* Avatar */}
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {initial}
+                  {initials}
                 </Text>
               </View>
             </View>

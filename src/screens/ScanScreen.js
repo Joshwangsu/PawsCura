@@ -283,7 +283,7 @@ export default function ScanScreen() {
           <View style={styles.resultCard}>
             <View style={styles.resultHeader}>
               <Ionicons name="medical" size={20} color={Colors.primary} />
-              <Text style={styles.resultTitle}>AI Assessment Complete</Text>
+              <Text style={styles.resultTitle}>AI Assessment Complete{result?.modelSource ? ` (${result.modelSource})` : ''}</Text>
             </View>
 
             {/* Matched Pet Auto-Identification & Auto-Record Banner */}

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { generateImageFeatureVector, matchPetByEmbedding } from '../utils/vectorSimilarity.js';
+import { runLocalYoloScan } from './localYoloScanner';
 
 // Initialize Gemini Client
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
@@ -71,46 +72,26 @@ export async function chatWithVet(messageHistory) {
 }
 
 /**
- * Analyzes a base64 encoded image using Gemini Flash and matches against registered pets
+ * Analyzes a base64 encoded image using the local best.pt YOLO AI Model
+ * and matches against registered pets
  * @param {string} base64Image - The scan image encoded as base64
  * @param {string} mimeType - The mime type (e.g., 'image/jpeg')
  * @param {Array} registeredPets - List of registered pets for auto-identification
  */
 export async function analyzePetCondition(base64Image, mimeType, registeredPets = []) {
-  const petsSummary = registeredPets.length > 0
-    ? registeredPets.map((p, idx) => `[Pet #${idx + 1}] ID: "${p.id}", Name: "${p.name}", Species: "${p.species}", Breed: "${p.breed || 'Unknown'}"`).join('\n')
-    : 'No registered pets provided.';
+  try {
+    // 1. Run local best.pt YOLO AI model
+    const localResult = await runLocalYoloScan(base64Image, mimeType, registeredPets);
+    if (localResult) {
+      return localResult;
+    }
+  } catch (localErr) {
+    console.warn("Local best.pt scan error, attempting fallback:", localErr);
+  }
 
-  // Compute vector embedding for scan photo
-  const scanEmbedding = generateImageFeatureVector(base64Image);
-  const vectorMatch = matchPetByEmbedding(scanEmbedding, registeredPets);
-
-  // FALLBACK: If no API key is provided, simulate a realistic AI response with vector pet matching
+  // FALLBACK: If local scan encountered an issue and Gemini is configured
   if (!genAI) {
-    console.log("No Gemini API Key found. Returning mock AI analysis with vector pet matching.");
-    const matchedPet = vectorMatch ? vectorMatch.pet : (registeredPets.length > 0 ? registeredPets[0] : null);
-    const matchScore = vectorMatch ? vectorMatch.confidence : (matchedPet ? 92 : 0);
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          matchedPetId: matchedPet ? matchedPet.id : null,
-          matchedPetName: matchedPet ? matchedPet.name : null,
-          matchConfidence: matchScore,
-          suspectedCondition: "Mild Hot Spot (Acute Moist Dermatitis)",
-          confidence: 75,
-          alternatives: [
-            { condition: "Allergic Dermatitis", confidence: 15 },
-            { condition: "Flea Bite Hypersensitivity", confidence: 10 }
-          ],
-          urgencyLevel: "Needs Evaluation",
-          analysis: matchedPet 
-            ? `I observe a localized area of redness and fur loss on ${matchedPet.name}. Visual fingerprint embedding matched ${matchedPet.name}'s profile with ${matchScore}% cosine similarity.`
-            : "I observe a localized area of redness, inflammation, and possible fur loss. It appears irritated and may be itchy or painful for the pet.",
-          recommendedAction: "Prevent the pet from scratching or licking the area. Clean gently with a pet-safe antiseptic and consider a veterinary visit if it worsens or doesn't improve in 24 hours."
-        });
-      }, 1800);
-    });
+    return await runLocalYoloScan(base64Image, mimeType, registeredPets);
   }
 
   try {

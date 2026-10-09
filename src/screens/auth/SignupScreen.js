@@ -14,14 +14,16 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
-import { auth } from '../../services/firebaseConfig';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../services/firebaseConfig';
 import { useAuth } from '../../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
 export default function SignupScreen({ navigation }) {
   const { reloadUser } = useAuth();
   const [form, setForm] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -35,7 +37,8 @@ export default function SignupScreen({ navigation }) {
 
   const validate = () => {
     const errs = {};
-    if (!form.name.trim()) errs.name = 'Full name is required';
+    if (!form.firstName.trim()) errs.firstName = 'First name is required';
+    if (!form.lastName.trim()) errs.lastName = 'Last name is required';
     if (!form.email.trim()) errs.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Enter a valid email';
     if (!form.password) errs.password = 'Password is required';
@@ -54,14 +57,30 @@ export default function SignupScreen({ navigation }) {
     setIsLoading(true);
     
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const cleanFirst = form.firstName.trim();
+      const cleanLast = form.lastName.trim();
+      const fullName = `${cleanFirst} ${cleanLast}`;
+
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
       
-      // Optionally update the user's display name
-      if (form.name) {
-        await updateProfile(userCredential.user, {
-          displayName: form.name
-        });
-      }
+      // Update the user's display name in Firebase Auth
+      await updateProfile(userCredential.user, {
+        displayName: fullName
+      });
+
+      // Save user record directly to Firestore users collection
+      const todayStr = new Date().toISOString().split('T')[0];
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        firstName: cleanFirst,
+        lastName: cleanLast,
+        displayName: fullName,
+        username: fullName,
+        email: form.email.trim().toLowerCase(),
+        isPremium: false,
+        scanUsageCount: 0,
+        scanUsageDate: todayStr,
+        createdAt: serverTimestamp(),
+      });
 
       // Immediately sign them out so they aren't auto-logged in
       await signOut(auth);
@@ -88,15 +107,7 @@ export default function SignupScreen({ navigation }) {
     }
   };
 
-  const FIELDS = [
-    {
-      key: 'name',
-      label: 'Full Name',
-      icon: 'person-outline',
-      placeholder: 'Alex Johnson',
-      keyboard: 'default',
-      secure: false,
-    },
+  const ACCOUNT_FIELDS = [
     {
       key: 'email',
       label: 'Email Address',
@@ -158,8 +169,69 @@ export default function SignupScreen({ navigation }) {
               </View>
             )}
 
-            {/* Fields */}
-            {FIELDS.map((field) => {
+            {/* First & Last Name Inputs in a 2-Column Row */}
+            <View style={styles.nameRow}>
+              <View style={[styles.fieldGroup, styles.nameField]}>
+                <Text style={styles.label}>First Name</Text>
+                <View
+                  style={[
+                    styles.inputRow,
+                    errors.firstName && styles.inputError,
+                  ]}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={Colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Alex"
+                    placeholderTextColor={Colors.textMuted}
+                    value={form.firstName}
+                    onChangeText={(v) => updateForm('firstName', v)}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                </View>
+                {errors.firstName && (
+                  <Text style={styles.errorText}>{errors.firstName}</Text>
+                )}
+              </View>
+
+              <View style={[styles.fieldGroup, styles.nameField]}>
+                <Text style={styles.label}>Last Name</Text>
+                <View
+                  style={[
+                    styles.inputRow,
+                    errors.lastName && styles.inputError,
+                  ]}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={Colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Johnson"
+                    placeholderTextColor={Colors.textMuted}
+                    value={form.lastName}
+                    onChangeText={(v) => updateForm('lastName', v)}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                </View>
+                {errors.lastName && (
+                  <Text style={styles.errorText}>{errors.lastName}</Text>
+                )}
+              </View>
+            </View>
+
+            {/* Email, Password, Confirm Password Fields */}
+            {ACCOUNT_FIELDS.map((field) => {
               const isSecure = field.secure
                 ? field.toggleKey === 'showPassword'
                   ? !showPassword
@@ -194,7 +266,7 @@ export default function SignupScreen({ navigation }) {
                       value={form[field.key]}
                       onChangeText={(v) => updateForm(field.key, v)}
                       keyboardType={field.keyboard}
-                      autoCapitalize={field.key === 'name' ? 'words' : 'none'}
+                      autoCapitalize="none"
                       autoCorrect={false}
                       secureTextEntry={isSecure}
                     />
@@ -325,6 +397,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.danger,
     fontWeight: '600',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: Spacing.md,
+  },
+  nameField: {
+    marginBottom: 0,
   },
   fieldGroup: {
     marginBottom: Spacing.md,

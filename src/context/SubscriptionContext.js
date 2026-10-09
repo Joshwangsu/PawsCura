@@ -12,12 +12,14 @@ export const SubscriptionProvider = ({ children }) => {
   const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [scanUsage, setScanUsage] = useState({ count: 0, date: '' });
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
       setIsPremium(false);
       setScanUsage({ count: 0, date: '' });
+      setUserData(null);
       setLoading(false);
       return;
     }
@@ -28,6 +30,7 @@ export const SubscriptionProvider = ({ children }) => {
     const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
+        setUserData(data);
         
         // Log out immediately if suspended
         if (data.isSuspended) {
@@ -45,12 +48,31 @@ export const SubscriptionProvider = ({ children }) => {
 
         setIsPremium(!!data.isPremium || isTestEmail);
         
-        // Sync username/email to firestore for new NoSQL schema fields if missing
-        if (!data.username || !data.email) {
-          updateDoc(userDocRef, {
-            username: data.username || user.displayName || user.email.split('@')[0],
-            email: data.email || user.email
-          }).catch(err => console.log(`Error updating user details: ${err}`));
+        // Derive first and last name if missing for existing legacy accounts
+        let derivedFirst = data.firstName;
+        let derivedLast = data.lastName;
+        const fallbackName = data.displayName || user.displayName || '';
+        if ((!derivedFirst || !derivedLast) && fallbackName) {
+          const parts = fallbackName.trim().split(' ');
+          if (!derivedFirst) derivedFirst = parts[0] || '';
+          if (!derivedLast) derivedLast = parts.slice(1).join(' ') || '';
+        }
+
+        const updatePayload = {};
+        if (!data.firstName && derivedFirst) updatePayload.firstName = derivedFirst;
+        if (!data.lastName && derivedLast) updatePayload.lastName = derivedLast;
+        if (!data.displayName && (derivedFirst || derivedLast)) {
+          updatePayload.displayName = [derivedFirst, derivedLast].filter(Boolean).join(' ');
+        }
+        if (!data.username) {
+          updatePayload.username = updatePayload.displayName || data.displayName || user.displayName || user.email.split('@')[0];
+        }
+        if (!data.email) {
+          updatePayload.email = data.email || user.email;
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          updateDoc(userDocRef, updatePayload).catch(err => console.log(`Error updating user details: ${err}`));
         }
 
         // Check if daily scan count needs reset
@@ -71,13 +93,22 @@ export const SubscriptionProvider = ({ children }) => {
       } else {
         // Initialize user document for first time
         const todayStr = new Date().toISOString().split('T')[0];
-        setDoc(userDocRef, {
-          username: user.displayName || user.email.split('@')[0],
+        const parts = (user.displayName || '').trim().split(' ');
+        const first = parts[0] || '';
+        const last = parts.slice(1).join(' ') || '';
+        const full = [first, last].filter(Boolean).join(' ') || user.displayName || user.email.split('@')[0];
+        const initialDoc = {
+          firstName: first,
+          lastName: last,
+          displayName: full,
+          username: full,
           email: user.email,
           isPremium: isTestEmail ? true : false,
           scanUsageCount: 0,
           scanUsageDate: todayStr
-        });
+        };
+        setDoc(userDocRef, initialDoc);
+        setUserData(initialDoc);
       }
       setLoading(false);
     });
@@ -99,7 +130,7 @@ export const SubscriptionProvider = ({ children }) => {
   };
 
   return (
-    <SubscriptionContext.Provider value={{ isPremium, scanUsage, incrementScanCount, upgradeToPremium, loading }}>
+    <SubscriptionContext.Provider value={{ isPremium, scanUsage, userData, incrementScanCount, upgradeToPremium, loading }}>
       {children}
     </SubscriptionContext.Provider>
   );

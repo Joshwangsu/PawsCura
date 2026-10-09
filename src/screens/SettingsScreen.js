@@ -20,36 +20,75 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 export default function SettingsScreen({ navigation }) {
-  const { user } = useAuth();
-  const { isPremium } = useSubscription();
+  const { user, reloadUser } = useAuth();
+  const { isPremium, userData } = useSubscription();
 
-  const [settingsName, setSettingsName] = useState(user?.displayName || '');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [settingsEmail, setSettingsEmail] = useState(user?.email || '');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  const displayName = user?.displayName || 'User';
-  const initial = displayName.charAt(0).toUpperCase();
+  React.useEffect(() => {
+    if (userData) {
+      if (userData.firstName !== undefined) setFirstName(userData.firstName || '');
+      if (userData.lastName !== undefined) setLastName(userData.lastName || '');
+    } else if (user?.displayName) {
+      const parts = user.displayName.trim().split(' ');
+      setFirstName(parts[0] || '');
+      setLastName(parts.slice(1).join(' ') || '');
+    }
+  }, [userData, user]);
+
+  const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || user?.displayName || 'User';
+  
+  const getInitials = () => {
+    const f = firstName.trim();
+    const l = lastName.trim();
+    if (f && l) {
+      return `${f[0]}${l[0]}`.toUpperCase();
+    }
+    if (f) return f[0].toUpperCase();
+    if (user?.displayName) return user.displayName[0].toUpperCase();
+    return 'U';
+  };
+  const initials = getInitials();
 
   const handleSaveSettings = async () => {
-    if (!settingsName.trim()) {
-      Alert.alert('Error', 'Display Name cannot be empty.');
+    if (!firstName.trim()) {
+      Alert.alert('Validation Error', 'First name cannot be empty.');
+      return;
+    }
+    if (!lastName.trim()) {
+      Alert.alert('Validation Error', 'Last name cannot be empty.');
       return;
     }
     setIsSavingSettings(true);
     try {
+      const cleanFirst = firstName.trim();
+      const cleanLast = lastName.trim();
+      const newFullName = `${cleanFirst} ${cleanLast}`;
+
       // 1. Update Auth profile cache
       await updateProfile(auth.currentUser, {
-        displayName: settingsName.trim()
+        displayName: newFullName
       });
 
       // 2. Update Firestore user document
       const userDocRef = doc(db, 'users', user.uid);
       await updateDoc(userDocRef, {
-        username: settingsName.trim().split('@')[0],
+        firstName: cleanFirst,
+        lastName: cleanLast,
+        displayName: newFullName,
+        username: newFullName,
         email: settingsEmail.trim()
       });
 
-      Alert.alert('Success', 'Your profile settings have been updated!');
+      // 3. Reload auth user
+      if (reloadUser) {
+        await reloadUser();
+      }
+
+      Alert.alert('Success', 'Your first and last names have been updated!');
     } catch (error) {
       console.error('Error saving profile:', error);
       Alert.alert('Error', 'Failed to update profile settings.');
@@ -118,7 +157,7 @@ export default function SettingsScreen({ navigation }) {
               style={styles.avatarGradientBorder}
             >
               <View style={styles.avatarLarge}>
-                <Text style={styles.avatarText}>{initial}</Text>
+                <Text style={styles.avatarText}>{initials}</Text>
               </View>
             </LinearGradient>
             <View style={styles.badgeContainer}>
@@ -127,7 +166,7 @@ export default function SettingsScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          <Text style={styles.profileName}>{displayName}</Text>
+          <Text style={styles.profileName}>{fullName}</Text>
           <Text style={styles.profileEmail}>{user?.email}</Text>
         </View>
 
@@ -139,15 +178,31 @@ export default function SettingsScreen({ navigation }) {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Display Name</Text>
+            <Text style={styles.inputLabel}>First Name</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="person-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.textInput}
-                placeholder="Enter display name"
+                placeholder="Enter first name"
                 placeholderTextColor={Colors.textMuted}
-                value={settingsName}
-                onChangeText={setSettingsName}
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Last Name</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="person-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter last name"
+                placeholderTextColor={Colors.textMuted}
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
               />
             </View>
           </View>
