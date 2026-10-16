@@ -267,7 +267,7 @@ export default function ChatbotScreen({ route, navigation }) {
             <View style={styles.onlineBadge} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>AI Vet Assistant</Text>
+            <Text style={styles.headerTitle}>Chatbot</Text>
             <Text style={styles.headerSub} numberOfLines={1}>
               {currentSession ? currentSession.title : 'Active Consultation'}
             </Text>
@@ -553,6 +553,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   headerTitleContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
