@@ -36,6 +36,8 @@ export default function ChatbotScreen({ route, navigation }) {
   const [isTyping, setIsTyping] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const flatListRef = useRef(null);
+  // The session (if any) that the scan context belongs to. Manually created chats must NOT use it.
+  const contextSessionIdRef = useRef(null);
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length;
 
@@ -85,6 +87,7 @@ export default function ChatbotScreen({ route, navigation }) {
             const linkedSess = loadedSessions.find((s) => s.scanRecordId === scanRecordId);
             if (linkedSess) {
               // Resume the existing session for this scan
+              contextSessionIdRef.current = linkedSess.id;
               setActiveSessionId(linkedSess.id);
             } else {
               // First time opening chatbot for this scan — create a new dedicated session
@@ -119,11 +122,13 @@ export default function ChatbotScreen({ route, navigation }) {
       });
 
       if (loaded.length === 0) {
-        const pet = (initialContext && (initialContext.matchedPetName || initialContext.petName)) || 'your pet';
-        const condition = initialContext ? initialContext.suspectedCondition : '';
-        const observations = initialContext ? initialContext.analysis : '';
+        // Only the scan-linked session gets the scan-context greeting; new chats start fresh
+        const ctx = activeSessionId === contextSessionIdRef.current ? initialContext : null;
+        const pet = (ctx && (ctx.matchedPetName || ctx.petName)) || 'your pet';
+        const condition = ctx ? ctx.suspectedCondition : '';
+        const observations = ctx ? ctx.analysis : '';
 
-        const greeting = initialContext && condition
+        const greeting = ctx && condition
           ? `Hello! I have loaded the AI assessment for **${pet}** regarding **${condition}**.\n\nObservations: ${observations}\n\nHow can I help answer questions or guide care for ${pet}?`
           : 'Hello! I am your AI Virtual Vet Assistant. How can I assist you with your pet today?';
 
@@ -150,7 +155,7 @@ export default function ChatbotScreen({ route, navigation }) {
   const createNewSession = async (customTitle, linkedScanRecordId) => {
     if (!user) return;
     const sessId = `sess_${Date.now()}`;
-    const newTitle = customTitle || (initialContext ? formatSessionTitle(initialContext) : `Pet - Consultation #${sessions.length + 1}`);
+    const newTitle = customTitle || `Pet - Consultation #${sessions.length + 1}`;
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
     const newSess = {
@@ -163,6 +168,8 @@ export default function ChatbotScreen({ route, navigation }) {
     };
 
     try {
+      // Sessions created for a scan (title/link supplied by the auto-open flow) own the scan context
+      if (customTitle || linkedScanRecordId) contextSessionIdRef.current = sessId;
       await setDoc(doc(db, 'chats', user.uid, 'userSessions', sessId), newSess);
       setActiveSessionId(sessId);
       setActiveTab('chat');

@@ -17,6 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { useAds } from '../services/ads';
+import AdBanner from '../components/AdBanner';
+import { AdRichRotator, AdPopup } from '../components/AdRich';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import HealthLogCard from '../components/HealthLogCard';
@@ -739,6 +742,7 @@ export default function PetsScreen() {
   const { pets, addPet, deletePet, updatePet, healthLogs } = useHealth();
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
+  const { topBanners, bottomBanners, richInline, popup } = useAds('pets');
   const [selectedPet, setSelectedPet] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -811,6 +815,8 @@ export default function PetsScreen() {
           </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      <AdBanner ads={topBanners} dismissKey="pets:top" />
 
       {/* Pet Dashboard Content */}
       <ScrollView
@@ -914,7 +920,6 @@ export default function PetsScreen() {
                     { label: 'Age', value: activePet?.age !== undefined ? `${activePet.age} yrs` : 'Not specified', icon: 'calendar' },
                     { label: 'Weight', value: activePet?.weight !== undefined ? `${activePet.weight} kg` : 'Not specified', icon: 'barbell' },
                     { label: 'Gender', value: activePet?.gender || 'Not specified', icon: 'male-female' },
-                    { label: 'Birthday', value: activePet?.birthday || 'Not specified', icon: 'gift' },
                   ].map((info) => (
                     <View key={info.label} style={styles.detailInfoCard}>
                       <Ionicons name={info.icon} size={16} color={activePet?.accentColor || Colors.primary} />
@@ -1008,7 +1013,11 @@ export default function PetsScreen() {
 
           </>
         )}
+        <AdRichRotator ads={richInline} />
+        <AdBanner ads={bottomBanners} dismissKey="pets:bottom" />
       </ScrollView>
+
+      <AdPopup ad={popup} />
 
       {/* Dropdown Modal List */}
       <Modal visible={showDropdown} animationType="slide" transparent>
@@ -1353,12 +1362,12 @@ const styles = StyleSheet.create({
   detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
     justifyContent: 'space-between',
     marginBottom: Spacing.md,
   },
   detailInfoCard: {
-    width: '31%',
+    width: '48%',
     backgroundColor: Colors.background,
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,

@@ -21,6 +21,10 @@ import { analyzePetCondition } from '../services/gemini';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useAds } from '../services/ads';
+import { AdRichCard } from '../components/AdRich';
+
+const SCAN_MIN_SECONDS = 5;
 
 const SCAN_TIPS = [
   { icon: 'sunny-outline', text: 'Good lighting helps get a clear scan' },
@@ -41,11 +45,13 @@ const ANALYSIS_STEPS = [
 const MODAL_ACCENT = '#63B3ED'; // blue-300 — visible against dark overlay
 const MODAL_ACCENT_DIM = 'rgba(99,179,237,0.18)'; // tinted surface, not same as border
 
-function ScanLoadingModal({ visible }) {
+function ScanLoadingModal({ visible, ads = [] }) {
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim    = useRef(new Animated.Value(1)).current;
   const fadeAnim     = useRef(new Animated.Value(0)).current;
   const [stepIndex, setStepIndex] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(SCAN_MIN_SECONDS);
+  const [shownAd, setShownAd] = useState(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -53,6 +59,11 @@ function ScanLoadingModal({ visible }) {
     // Fade in the whole modal
     fadeAnim.setValue(0);
     setStepIndex(0);
+    setSecondsLeft(SCAN_MIN_SECONDS);
+    setShownAd(ads.length ? ads[Math.floor(Math.random() * ads.length)] : null);
+    const countdown = setInterval(() => {
+      setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 280,
@@ -102,6 +113,7 @@ function ScanLoadingModal({ visible }) {
       scanLoop.stop();
       pulseLoop.stop();
       clearInterval(interval);
+      clearInterval(countdown);
     };
   }, [visible]);
 
@@ -166,7 +178,15 @@ function ScanLoadingModal({ visible }) {
           ))}
         </View>
 
-        <Text style={scanModal.disclaimer}>AI-powered assessment in progress</Text>
+        <Text style={scanModal.disclaimer}>
+          {secondsLeft > 0 ? `Your results will be ready in ${secondsLeft}s` : 'Almost done...'}
+        </Text>
+
+        {shownAd && (
+          <View style={{ width: '100%' }}>
+            <AdRichCard ad={shownAd} />
+          </View>
+        )}
       </Animated.View>
     </Modal>
   );
@@ -177,6 +197,8 @@ export default function ScanScreen() {
   const { pets, healthLogs, addHealthLog, updateHealthLog } = useHealth();
   const { isPremium, scanUsage, incrementScanCount } = useSubscription();
   const navigation = useNavigation();
+  const { topBanners, bottomBanners, richInline } = useAds('scan');
+  const scanAds = [...richInline, ...topBanners, ...bottomBanners];
   const [imageUri, setImageUri] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -281,8 +303,12 @@ export default function ScanScreen() {
         const mimeType = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
         
         setLoading(true);
+        const startedAt = Date.now();
         try {
           const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets);
+          // Keep the loading screen (and ad) up for at least SCAN_MIN_SECONDS
+          const remaining = SCAN_MIN_SECONDS * 1000 - (Date.now() - startedAt);
+          if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
           setResult(analysisResult);
           incrementScanCount();
 
@@ -420,7 +446,7 @@ export default function ScanScreen() {
   return (
     <View style={styles.safe}>
       {/* Full-screen AI scan animation */}
-      <ScanLoadingModal visible={loading} />
+      <ScanLoadingModal visible={loading} ads={scanAds} />
       <ScrollView ref={scrollViewRef} style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient
@@ -655,24 +681,6 @@ export default function ScanScreen() {
             </View>
           </TouchableOpacity>
         </View>
-
-        {/* Find Nearby Clinics Banner */}
-        <TouchableOpacity
-          style={styles.findClinicsBanner}
-          onPress={() => navigation.navigate('Clinics')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.findClinicsBannerLeft}>
-            <View style={styles.findClinicsIconCircle}>
-              <Ionicons name="location" size={20} color={Colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.findClinicsBannerTitle}>Need a Professional Vet?</Text>
-              <Text style={styles.findClinicsBannerSub}>Find nearby veterinary clinics & directions</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-        </TouchableOpacity>
 
         {/* Tips */}
         <View style={styles.tipsCard}>

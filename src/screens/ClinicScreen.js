@@ -20,6 +20,9 @@ import MapViewDirections from 'react-native-maps-directions';
 import ClinicCard from '../components/ClinicCard';
 import { getClinicsFromFirestore } from '../services/firestoreClinics';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { useAds } from '../services/ads';
+import AdBanner from '../components/AdBanner';
+import { AdPopup } from '../components/AdRich';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 
@@ -30,6 +33,7 @@ const MAP_PROVIDER = undefined;
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function ClinicScreen() {
+  const { topBanners, popup } = useAds('clinics');
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
   const [search, setSearch] = useState('');
@@ -122,26 +126,6 @@ export default function ClinicScreen() {
         </View>
       )}
 
-      {/* ── Search Bar ── */}
-      <View style={styles.searchWrapper}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={20} color={Colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search clinics or location..."
-            placeholderTextColor={Colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
       {/* ── Map View ── */}
       <View style={styles.mapContainer}>
         {location ? (
@@ -208,6 +192,8 @@ export default function ClinicScreen() {
         </View>
       )}
 
+      <AdBanner ads={topBanners} dismissKey="clinics:top" />
+
       {/* ── Clinic List ── */}
       <View style={styles.listHeader}>
         <Text style={styles.listTitle}>Nearby Clinics</Text>
@@ -250,6 +236,8 @@ export default function ClinicScreen() {
           }
         />
       )}
+
+      <AdPopup ad={popup} />
 
       {/* ── Clinic Detail Modal ── */}
       {detailClinic && (
@@ -481,7 +469,7 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: '#FFFFFF', ...Shadows.md,
   },
 
-  premiumBannerWrapper: { position: 'absolute', top: 140, left: 20, right: 20, zIndex: 10 },
+  premiumBannerWrapper: { paddingHorizontal: Spacing.md, marginTop: Spacing.sm, marginBottom: Spacing.xs },
   premiumBanner: {
     backgroundColor: Colors.card, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.md,
     paddingVertical: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

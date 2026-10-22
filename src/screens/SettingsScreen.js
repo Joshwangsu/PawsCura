@@ -103,7 +103,7 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons name="settings-sharp" size={20} color={Colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>App Settings</Text>
+            <Text style={styles.headerTitle}>User Settings</Text>
             <Text style={styles.headerSub} numberOfLines={1}>Manage your account, profile, and plans</Text>
           </View>
         </View>
@@ -194,7 +194,7 @@ export default function SettingsScreen({ navigation }) {
                 onPress={() => navigation.navigate('Paywall')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.membershipBtnCancelText}>Cancel Subscription / Downgrade</Text>
+                <Text style={styles.membershipBtnCancelText}>Cancel Subscription</Text>
               </TouchableOpacity>
             </LinearGradient>
           ) : (

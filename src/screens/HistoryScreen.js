@@ -17,12 +17,16 @@ import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import StatusBadge from '../components/StatusBadge';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { useAds } from '../services/ads';
+import AdBanner from '../components/AdBanner';
+import { AdPopup } from '../components/AdRich';
 
 const { width } = Dimensions.get('window');
 
 export default function HistoryScreen({ navigation }) {
   const { healthLogs, pets } = useHealth();
   const { isPremium } = useSubscription();
+  const { topBanners, popup } = useAds('records');
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedScan, setSelectedScan] = useState(null);
 
@@ -166,6 +170,9 @@ export default function HistoryScreen({ navigation }) {
           })}
         </ScrollView>
       </View>
+
+      <AdBanner ads={topBanners} dismissKey="records:top" />
+      <AdPopup ad={popup} />
 
       {/* ── Timeline list ─────────────────────────────── */}
       <FlatList

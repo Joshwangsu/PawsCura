@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -67,6 +68,17 @@ export default function PaywallScreen({ navigation }) {
       formatted += cleaned[i];
     }
     setExpiry(formatted);
+  };
+
+  const confirmCancelSubscription = () => {
+    Alert.alert(
+      'Cancel Subscription?',
+      'Are you sure you want to cancel? You will lose your Premium features and be moved to the Free plan immediately.',
+      [
+        { text: 'Keep Premium', style: 'cancel' },
+        { text: 'Yes, Cancel', style: 'destructive', onPress: () => handleSelectPlan('free') },
+      ]
+    );
   };
 
   const handleSelectPlan = async (plan) => {
@@ -254,14 +266,14 @@ export default function PaywallScreen({ navigation }) {
               
               <TouchableOpacity 
                 style={[styles.selectBtn, !isPremium && styles.selectBtnDisabled]}
-                onPress={() => handleSelectPlan('free')}
+                onPress={confirmCancelSubscription}
                 disabled={!isPremium || loading}
               >
                 {loading && selectedPlan === 'free' ? (
                   <ActivityIndicator color={Colors.primary} />
                 ) : (
                   <Text style={[styles.selectBtnText, !isPremium && styles.selectBtnTextDisabled]}>
-                    {!isPremium ? 'Active Plan' : 'Downgrade to Free'}
+                    {!isPremium ? 'Active Plan' : 'Cancel Subscription'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -430,7 +442,7 @@ export default function PaywallScreen({ navigation }) {
             </View>
             
             <Text style={styles.successTitle}>
-              {successType === 'upgrade' ? 'Upgrade Successful!' : 'Subscription Downgraded'}
+              {successType === 'upgrade' ? 'Upgrade Successful!' : 'Subscription Cancelled'}
             </Text>
             <Text style={styles.successMessage}>
               {successType === 'upgrade' 
