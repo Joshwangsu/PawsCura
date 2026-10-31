@@ -11,11 +11,14 @@ import {
   Alert,
   Animated,
   Easing,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useNavigation } from '@react-navigation/native';
 import { analyzePetCondition } from '../services/gemini';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
@@ -46,6 +49,7 @@ const MODAL_ACCENT = '#63B3ED'; // blue-300 — visible against dark overlay
 const MODAL_ACCENT_DIM = 'rgba(99,179,237,0.18)'; // tinted surface, not same as border
 
 function ScanLoadingModal({ visible, ads = [] }) {
+  const insets = useSafeAreaInsets();
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim    = useRef(new Animated.Value(1)).current;
   const fadeAnim     = useRef(new Animated.Value(0)).current;
@@ -117,55 +121,60 @@ function ScanLoadingModal({ visible, ads = [] }) {
     };
   }, [visible]);
 
-  // Scan line translates 0 → 200 px (height of the scan box)
+  // Scan line translates 0 → 100 px (height of the scan box)
   const translateY = scanLineAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 200],
+    outputRange: [0, 100],
   });
 
   const step = ANALYSIS_STEPS[stepIndex];
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
-      <Animated.View style={[scanModal.overlay, { opacity: fadeAnim }]}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <StatusBar barStyle="light-content" translucent />
+      <Animated.View
+        style={[
+          scanModal.overlay,
+          {
+            opacity: fadeAnim,
+            paddingTop: Math.max(insets.top + 28, 70),
+            paddingBottom: Math.max(insets.bottom + 20, 32),
+          },
+        ]}
+      >
+        {/* ── Brought-down Paw Logo (well clear of Dynamic Island) ── */}
+        <View style={scanModal.iconRingOuter}>
+          <Animated.View style={[scanModal.iconRing, { transform: [{ scale: pulseAnim }] }]}>
+            <Ionicons name="paw" size={38} color={MODAL_ACCENT} />
+          </Animated.View>
+        </View>
 
-        {/* ── Pulsing icon ring ─────────────────────────────────────── */}
-        {/* Rule 2: ring border (#63B3ED at 55% opacity) is visibly darker than
-            the tinted bg (rgba 18% same hue) — clear edge contrast */}
-        <Animated.View style={[scanModal.iconRing, { transform: [{ scale: pulseAnim }] }]}>
-          <Ionicons name="paw" size={40} color={MODAL_ACCENT} />
-        </Animated.View>
-
-        {/* ── Scan frame with sweep line ────────────────────────────── */}
-        {/* Not a nested card — it is a scan viewfinder frame (fundamentally
-            different content type: animated instrument, not a card) */}
+        {/* ── Scan viewfinder frame with sweep line ── */}
         <View style={scanModal.scanBox}>
-          {/* Corner brackets only — no solid border, no surface fill */}
+          {/* Corner brackets only */}
           <View style={[scanModal.corner, scanModal.cornerTL]} />
           <View style={[scanModal.corner, scanModal.cornerTR]} />
           <View style={[scanModal.corner, scanModal.cornerBL]} />
           <View style={[scanModal.corner, scanModal.cornerBR]} />
 
-          {/* Sweep line — accent color only element on neutral surface */}
+          {/* Sweep line */}
           <Animated.View
             style={[scanModal.scanLine, { transform: [{ translateY }] }]}
           />
 
-          {/* Overline label — not em-dash, not emoji, just letterSpaced caps */}
+          {/* Overline label */}
           <Text style={scanModal.scanBoxLabel}>SCANNING</Text>
         </View>
 
-        {/* ── Step indicator ────────────────────────────────────────── */}
-        {/* Rule 3: Ionicons icon, not emoji. Rule 1: single-surface row,
-            tinted bg vs transparent overlay — distinct surface types */}
+        {/* ── Step indicator ── */}
         <View style={scanModal.stepRow}>
           <View style={scanModal.stepIconBadge}>
-            <Ionicons name={step.icon} size={18} color={MODAL_ACCENT} />
+            <Ionicons name={step.icon} size={15} color={MODAL_ACCENT} />
           </View>
           <Text style={scanModal.stepLabel}>{step.label}</Text>
         </View>
 
-        {/* ── Progress dots ─────────────────────────────────────────── */}
+        {/* ── Progress dots ── */}
         <View style={scanModal.dots}>
           {ANALYSIS_STEPS.map((_, i) => (
             <View
@@ -178,13 +187,15 @@ function ScanLoadingModal({ visible, ads = [] }) {
           ))}
         </View>
 
+        {/* ── Countdown text ── */}
         <Text style={scanModal.disclaimer}>
           {secondsLeft > 0 ? `Your results will be ready in ${secondsLeft}s` : 'Almost done...'}
         </Text>
 
+        {/* ── Sponsored ad card ── */}
         {shownAd && (
-          <View style={{ width: '100%' }}>
-            <AdRichCard ad={shownAd} />
+          <View style={scanModal.adWrapper}>
+            <AdRichCard ad={shownAd} imageHeight={130} style={{ marginVertical: 4 }} />
           </View>
         )}
       </Animated.View>
@@ -200,6 +211,8 @@ export default function ScanScreen() {
   const { topBanners, bottomBanners, richInline } = useAds('scan');
   const scanAds = [...richInline, ...topBanners, ...bottomBanners];
   const [imageUri, setImageUri] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
+  const [uploadedCloudUrl, setUploadedCloudUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
@@ -220,7 +233,7 @@ export default function ScanScreen() {
     }
   }, [result, loading]);
 
-  const uploadToCloudinary = async (uri) => {
+  const uploadToCloudinary = async (uri, base64Override = null) => {
     const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -230,13 +243,14 @@ export default function ScanScreen() {
     }
 
     try {
-      // Read the local file as base64 using expo-file-system.
-      // This is the ONLY reliable upload path in Expo — the FormData object
-      // approach throws "Unsupported FormDataPart implementation" on iOS/Android.
-      const mimeType = uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-      const base64Data = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const mimeType = uri && uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+      // Prefer the base64 string already returned by ImagePicker; fall back to expo-file-system/legacy
+      const base64Data =
+        base64Override ||
+        imageBase64 ||
+        (await FileSystem.readAsStringAsync(uri, {
+          encoding: 'base64',
+        }));
 
       // Cloudinary accepts a base64 data URI in the `file` field
       const dataUri = `data:${mimeType};base64,${base64Data}`;
@@ -262,7 +276,9 @@ export default function ScanScreen() {
       }
 
       const json = await response.json();
-      return json.secure_url ?? null;
+      const secureUrl = json.secure_url ?? null;
+      if (secureUrl) setUploadedCloudUrl(secureUrl);
+      return secureUrl;
     } catch (error) {
       console.error('Cloudinary upload error:', error);
       throw error;
@@ -281,7 +297,7 @@ export default function ScanScreen() {
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.5,
-        base64: true, // We need this for Gemini
+        base64: true, // We need this for Gemini & Cloudinary
       };
 
       let pickerResult;
@@ -294,6 +310,8 @@ export default function ScanScreen() {
       if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
         const asset = pickerResult.assets[0];
         setImageUri(asset.uri);
+        setImageBase64(asset.base64 || null);
+        setUploadedCloudUrl(null);
         setResult(null); // Clear old results
         setAutoSaveStatus(null);
         setAutoSavedPetName(null);
@@ -304,6 +322,12 @@ export default function ScanScreen() {
         
         setLoading(true);
         const startedAt = Date.now();
+        // Start uploading image to Cloudinary in parallel during the 5-second scan
+        const uploadPromise = uploadToCloudinary(asset.uri, asset.base64).catch((err) => {
+          console.warn('Parallel Cloudinary upload warning:', err);
+          return null;
+        });
+
         try {
           const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets);
           // Keep the loading screen (and ad) up for at least SCAN_MIN_SECONDS
@@ -318,7 +342,7 @@ export default function ScanScreen() {
             || (pets.length > 0 ? pets[0] : null);
 
           if (targetPet) {
-            autoSaveToPetRecord(analysisResult, targetPet, asset.uri);
+            autoSaveToPetRecord(analysisResult, targetPet, asset.uri, asset.base64, uploadPromise);
           } else if (pets.length === 0) {
             // No pets registered yet — prompt user
             setAutoSaveStatus('no_pets');
@@ -336,11 +360,11 @@ export default function ScanScreen() {
     }
   };
 
-  const autoSaveToPetRecord = async (analysis, pet, localUri) => {
+  const autoSaveToPetRecord = async (analysis, pet, localUri, base64Data = null, existingUploadPromise = null) => {
     setAutoSaveStatus('saving');
     setAutoSavedPetName(pet.name);
     try {
-      // Step 1: Save the record to Firestore immediately (no image yet)
+      // Step 1: Save the record to Firestore immediately
       const logPayload = {
         petId: pet.id,
         petName: pet.name,
@@ -352,7 +376,7 @@ export default function ScanScreen() {
         recommendedAction: analysis.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
-        imageUrl: null, // will be updated after upload
+        imageUrl: uploadedCloudUrl || null, // will be updated after upload
         autoRecorded: true,
         confidence: analysis.confidence || null,
         alternatives: analysis.alternatives || [],
@@ -363,10 +387,12 @@ export default function ScanScreen() {
       // Store the health record ID so chatbot can link to this specific scan
       if (docRef?.id) setAutoSavedRecordId(docRef.id);
 
-      // Step 2: Asynchronously upload image and update the record
+      // Step 2: Resolve Cloudinary image URL and update the Firestore record
       if (localUri && docRef?.id) {
         try {
-          const cloudUrl = await uploadToCloudinary(localUri);
+          const cloudUrl =
+            (existingUploadPromise ? await existingUploadPromise : null) ||
+            (await uploadToCloudinary(localUri, base64Data));
           if (cloudUrl) {
             await updateHealthLog(docRef.id, { imageUrl: cloudUrl });
           }
@@ -403,7 +429,7 @@ export default function ScanScreen() {
         recommendedAction: result.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
-        imageUrl: null,
+        imageUrl: uploadedCloudUrl || null,
         autoRecorded: false,
         confidence: result.confidence || null,
         alternatives: result.alternatives || [],
@@ -415,10 +441,10 @@ export default function ScanScreen() {
       setShowPetModal(false);
       setShowSuccessModal(true);
 
-      // Async image upload after save
-      if (imageUri && docRef?.id) {
+      // Async image upload after save if not already uploaded
+      if (!uploadedCloudUrl && imageUri && docRef?.id) {
         try {
-          const cloudUrl = await uploadToCloudinary(imageUri);
+          const cloudUrl = await uploadToCloudinary(imageUri, imageBase64);
           if (cloudUrl) {
             await updateHealthLog(docRef.id, { imageUrl: cloudUrl });
           }
@@ -1453,38 +1479,52 @@ const styles = StyleSheet.create({
 //   Rule 2: All borders are visibly darker than their backgrounds
 //   Rule 3: No emoji — Ionicons throughout
 //   Rule 5: 60-30-10 — dark overlay (60%), tinted badge surface (30%), accent blue (10%)
-const SCAN_CORNER = 20; // corner bracket px
-const SCAN_THICK  = 3;  // corner bracket stroke
+const SCAN_CORNER = 16; // corner bracket px
+const SCAN_THICK  = 2.5; // corner bracket stroke
 
 const scanModal = StyleSheet.create({
-  // 60% — dark translucent canvas
+  // Dark translucent canvas with safe area padding to prevent cramping at the top
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(4, 12, 28, 0.97)',
+    backgroundColor: 'rgba(4, 12, 28, 0.98)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 22,
+    paddingHorizontal: 8,
+    gap: 10,
   },
 
-  // 30% — tinted ring surface.
-  // bg: rgba(99,179,237,0.12)  →  border: rgba(99,179,237,0.55)
-  // Delta ~43% — clearly visible edge (Rule 2 satisfied)
+  // Outer ambient ring for the Paw Logo
+  iconRingOuter: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 179, 237, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Pulsing Paw Logo ring — brought down comfortably below Dynamic Island
   iconRing: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: 'rgba(99,179,237,0.12)',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(99, 179, 237, 0.14)',
     borderWidth: 1.5,
-    borderColor: 'rgba(99,179,237,0.55)',
+    borderColor: 'rgba(99, 179, 237, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#63B3ED',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
-  // Scan viewfinder frame — NOT a card, no background fill
-  // Pure corner-bracket instrument (Rule 1: fundamentally different content type)
+  // Compact scan viewfinder frame
   scanBox: {
-    width: 200,
-    height: 200,
+    width: 140,
+    height: 100,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1494,7 +1534,7 @@ const scanModal = StyleSheet.create({
     position: 'absolute',
     width: SCAN_CORNER,
     height: SCAN_CORNER,
-    borderColor: '#63B3ED',  // 10% accent — only element at full saturation
+    borderColor: '#63B3ED',  // 10% accent
   },
   cornerTL: {
     top: 0, left: 0,
@@ -1521,13 +1561,12 @@ const scanModal = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
 
-  // 10% accent — the sweep line is the single high-saturation element
+  // Sweep line
   scanLine: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
     height: 2,
     backgroundColor: '#63B3ED',
-    // Soft glow — kept subtle (Rule 8: not rgba(0,0,0,0.4) style heavy)
     shadowColor: '#63B3ED',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
@@ -1535,27 +1574,27 @@ const scanModal = StyleSheet.create({
     elevation: 6,
   },
 
-  // Overline label inside scan frame — letterSpaced caps, muted accent tint
+  // Overline label
   scanBoxLabel: {
-    fontSize: 11,
+    position: 'absolute',
+    bottom: 4,
+    fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(99,179,237,0.55)',
-    letterSpacing: 5,
+    color: 'rgba(99,179,237,0.60)',
+    letterSpacing: 3,
   },
 
-  // Step row: icon badge + label side by side — single-surface, not nested cards
+  // Step row: icon badge + label
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    marginTop: 2,
   },
-  // Rule 1: stepIconBadge is a pill, not a card — its content type (icon badge)
-  // is distinct from the overlay surface (fullscreen dark canvas)
-  // Rule 2: bg rgba(99,179,237,0.15) vs border rgba(99,179,237,0.45) — clear contrast
   stepIconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(99,179,237,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(99,179,237,0.40)',
@@ -1563,13 +1602,13 @@ const scanModal = StyleSheet.create({
     justifyContent: 'center',
   },
   stepLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.90)',
+    color: 'rgba(255,255,255,0.92)',
     letterSpacing: 0.2,
   },
 
-  // Progress dots — neutral resting, accent active (10% rule)
+  // Progress dots
   dots: {
     flexDirection: 'row',
     gap: 6,
@@ -1581,17 +1620,22 @@ const scanModal = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
   dotActive: {
-    backgroundColor: '#63B3ED',  // full accent — only active dot
-    width: 18,
+    backgroundColor: '#63B3ED',
+    width: 16,
     borderRadius: 3,
   },
 
-  // Muted helper text — not em-dash, no ellipsis punctuation
+  // Helper countdown text
   disclaimer: {
     fontSize: 12,
-    fontWeight: '400',
-    color: 'rgba(255,255,255,0.30)',
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.45)',
     letterSpacing: 0.1,
+  },
+
+  adWrapper: {
+    width: '100%',
+    marginTop: 2,
   },
 });
 

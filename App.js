@@ -1,4 +1,4 @@
-import 'react-native-url-polyfill/auto';
+import './src/polyfill';
 import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';

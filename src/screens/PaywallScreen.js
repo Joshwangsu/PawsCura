@@ -214,12 +214,10 @@ export default function PaywallScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={[Colors.primary, '#0f2b4d']}
-        style={StyleSheet.absoluteFillObject}
-      />
-      
+    <LinearGradient
+      colors={[Colors.primaryDark, '#0B1D3A']}
+      style={styles.container}
+    >
       <SafeAreaView style={styles.safe}>
         {/* Header */}
         <View style={styles.header}>
@@ -462,13 +460,14 @@ export default function PaywallScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0B1D3A',
   },
   safe: {
     flex: 1,
@@ -479,9 +478,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   closeBtn: {
-    padding: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: BorderRadius.full,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingHorizontal: Spacing.md,
@@ -496,16 +498,18 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 80,
     height: 80,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#fff',
+    color: '#FFFFFF',
     marginBottom: Spacing.xs,
     textAlign: 'center',
   },

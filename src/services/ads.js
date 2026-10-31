@@ -38,13 +38,14 @@ export function useAds(placement = 'default') {
   }, [isPremium]);
 
   return useMemo(() => {
-    const banners = ads.filter((a) => a.adType !== 'rich_media');
     const rich = ads.filter((a) => a.adType === 'rich_media');
+    const effectiveRich = rich.length > 0 ? rich : ads;
+    const allowPopup = placement !== 'clinics';
     return {
-      topBanners: banners,
-      bottomBanners: [...banners].reverse(),
-      richInline: rich,
-      popup: rich.length ? rich[Math.floor(Math.random() * rich.length)] : null,
+      topBanners: ads,
+      bottomBanners: [...ads].reverse(),
+      richInline: effectiveRich,
+      popup: (allowPopup && effectiveRich.length) ? effectiveRich[Math.floor(Math.random() * effectiveRich.length)] : null,
       placement,
     };
   }, [ads, placement]);

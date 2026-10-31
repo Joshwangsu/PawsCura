@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,14 +15,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
-import MapViewDirections from 'react-native-maps-directions';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import ClinicCard from '../components/ClinicCard';
 import { getClinicsFromFirestore } from '../services/firestoreClinics';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { useAds } from '../services/ads';
 import AdBanner from '../components/AdBanner';
-import { AdPopup } from '../components/AdRich';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 
@@ -33,7 +31,7 @@ const MAP_PROVIDER = undefined;
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function ClinicScreen() {
-  const { topBanners, popup } = useAds('clinics');
+  const { topBanners } = useAds('clinics');
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
   const [search, setSearch] = useState('');
@@ -43,6 +41,8 @@ export default function ClinicScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedClinic, setSelectedClinic] = useState(null);
   const [detailClinic, setDetailClinic] = useState(null);
+  const [routeCoords, setRouteCoords] = useState([]);
+  const mapRef = useRef(null);
 
   const loadLocation = async () => {
     setLoading(true);
@@ -94,9 +94,55 @@ export default function ClinicScreen() {
     filtered = filtered.slice(0, 3);
   }
 
+  const fetchRoutePath = async (origin, destination) => {
+    const directLine = [
+      { latitude: Number(origin.latitude), longitude: Number(origin.longitude) },
+      { latitude: Number(destination.latitude), longitude: Number(destination.longitude) },
+    ];
+    // Show immediate path while road route loads
+    setRouteCoords(directLine);
+
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates?.length > 0) {
+        const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => ({
+          latitude: lat,
+          longitude: lng,
+        }));
+        setRouteCoords(coords);
+        setTimeout(() => {
+          mapRef.current?.fitToCoordinates(coords, {
+            edgePadding: { top: 45, right: 45, bottom: 45, left: 45 },
+            animated: true,
+          });
+        }, 150);
+        return;
+      }
+    } catch (err) {
+      console.log('OSRM route fallback to direct line:', err.message);
+    }
+
+    setTimeout(() => {
+      mapRef.current?.fitToCoordinates(directLine, {
+        edgePadding: { top: 45, right: 45, bottom: 45, left: 45 },
+        animated: true,
+      });
+    }, 150);
+  };
+
   const handleNavigate = (clinic) => {
-    if (!clinic.coordinates) return;
+    if (!clinic?.coordinates) return;
     setSelectedClinic(clinic);
+    if (location?.coords) {
+      fetchRoutePath(location.coords, clinic.coordinates);
+    }
+  };
+
+  const clearRoute = () => {
+    setSelectedClinic(null);
+    setRouteCoords([]);
   };
 
   return (
@@ -120,7 +166,7 @@ export default function ClinicScreen() {
           <Text style={styles.routeActiveText} numberOfLines={1}>
             Routing to: {selectedClinic.name}
           </Text>
-          <TouchableOpacity onPress={() => setSelectedClinic(null)} style={styles.clearRouteBtn}>
+          <TouchableOpacity onPress={clearRoute} style={styles.clearRouteBtn}>
             <Ionicons name="close-circle" size={24} color={Colors.textInverse} />
           </TouchableOpacity>
         </View>
@@ -130,6 +176,7 @@ export default function ClinicScreen() {
       <View style={styles.mapContainer}>
         {location ? (
           <MapView
+            ref={mapRef}
             provider={MAP_PROVIDER}
             style={styles.map}
             initialRegion={{
@@ -158,14 +205,19 @@ export default function ClinicScreen() {
               );
             })}
 
-            {selectedClinic && location && (
-              <MapViewDirections
-                origin={location.coords}
-                destination={selectedClinic.coordinates}
-                apikey={process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}
-                strokeWidth={5}
-                strokeColor={Colors.primaryDark}
-              />
+            {selectedClinic && routeCoords.length >= 2 && (
+              <>
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeWidth={7}
+                  strokeColor="rgba(255, 255, 255, 0.85)"
+                />
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeWidth={4}
+                  strokeColor={Colors.primary}
+                />
+              </>
             )}
           </MapView>
         ) : (
@@ -197,10 +249,6 @@ export default function ClinicScreen() {
       {/* ── Clinic List ── */}
       <View style={styles.listHeader}>
         <Text style={styles.listTitle}>Nearby Clinics</Text>
-        <View style={styles.sortRow}>
-          <Ionicons name="swap-vertical-outline" size={14} color={Colors.primary} />
-          <Text style={styles.sortText}>Sort by distance</Text>
-        </View>
       </View>
 
       {loading ? (
@@ -236,8 +284,6 @@ export default function ClinicScreen() {
           }
         />
       )}
-
-      <AdPopup ad={popup} />
 
       {/* ── Clinic Detail Modal ── */}
       {detailClinic && (

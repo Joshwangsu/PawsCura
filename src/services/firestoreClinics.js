@@ -24,10 +24,12 @@ export async function getClinicsFromFirestore(userLat, userLon) {
       const data = doc.data();
 
       // Support both flat fields and nested coordinate objects
-      const clinicLat =
-        data.latitude ?? data.coordinates?.latitude ?? data.lat ?? 0;
-      const clinicLon =
-        data.longitude ?? data.coordinates?.longitude ?? data.lng ?? data.lon ?? 0;
+      const clinicLat = Number(
+        data.latitude ?? data.coordinates?.latitude ?? data.lat ?? 0
+      );
+      const clinicLon = Number(
+        data.longitude ?? data.coordinates?.longitude ?? data.lng ?? data.lon ?? 0
+      );
 
       const distanceKm = calculateDistance(userLat, userLon, clinicLat, clinicLon);
 
