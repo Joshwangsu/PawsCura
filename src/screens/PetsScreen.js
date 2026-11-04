@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Animated,
+  Easing,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +25,7 @@ import { AdRichRotator, AdPopup } from '../components/AdRich';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import HealthLogCard from '../components/HealthLogCard';
+import { getPetPhotoUri } from '../components/PetCard';
 
 const SPECIES_OPTIONS = [
   { label: 'Dog', icon: 'paw-outline', value: 'dog' },
@@ -138,7 +141,7 @@ function AddPetModal({ onClose, onAdd }) {
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
-    const frontPhoto = photos.find((p) => p.angle === 'front');
+    const frontPhoto = photos.find((p) => p.angle === 'front') || photos[0];
 
     onAdd({
       id: `p_${Date.now()}`,
@@ -207,7 +210,11 @@ function AddPetModal({ onClose, onAdd }) {
           <View style={[styles.stepDot, step >= 3 && styles.stepDotActive]} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.addFormScroll}
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
           {step === 1 && (
             <>
               {/* Pet Name */}
@@ -260,7 +267,7 @@ function AddPetModal({ onClose, onAdd }) {
               />
 
               {/* Theme Color */}
-              <Text style={styles.fieldLabel}>Card Accent</Text>
+              <Text style={styles.fieldLabel}>Card Color</Text>
               <View style={styles.colorRow}>
                 {PET_ACCENT_COLORS.map((c, idx) => (
                   <TouchableOpacity
@@ -271,7 +278,12 @@ function AddPetModal({ onClose, onAdd }) {
                       selectedColor === idx && styles.colorDotSelected,
                     ]}
                     onPress={() => setSelectedColor(idx)}
-                  />
+                    activeOpacity={0.8}
+                  >
+                    {selectedColor === idx && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </TouchableOpacity>
                 ))}
               </View>
             </>
@@ -448,7 +460,7 @@ function AddPetModal({ onClose, onAdd }) {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[Colors.primary, '#1E3F66']}
+              colors={[Colors.primary, '#794B35']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.nextBtnGradient}
@@ -553,7 +565,7 @@ function EditPetModal({ pet, onClose, onEdit }) {
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
-    const frontPhoto = photos.find((p) => p.angle === 'front');
+    const frontPhoto = photos.find((p) => p.angle === 'front') || photos[0];
 
     onEdit(pet.id, {
       name: form.name.trim(),
@@ -595,7 +607,11 @@ function EditPetModal({ pet, onClose, onEdit }) {
           <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.addFormScroll}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.addFormScroll}
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
           {step === 1 ? (
             <>
               <Text style={styles.fieldLabel}>Pet Name *</Text>
@@ -630,6 +646,26 @@ function EditPetModal({ pet, onClose, onEdit }) {
                 value={form.breed}
                 onChangeText={(v) => updateField('breed', v)}
               />
+
+              <Text style={styles.fieldLabel}>Card Color</Text>
+              <View style={styles.colorRow}>
+                {PET_ACCENT_COLORS.map((c, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.colorDot,
+                      { backgroundColor: c.accent },
+                      selectedColor === idx && styles.colorDotSelected,
+                    ]}
+                    onPress={() => setSelectedColor(idx)}
+                    activeOpacity={0.8}
+                  >
+                    {selectedColor === idx && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <View style={styles.formRow}>
                 <View style={{ flex: 1 }}>
@@ -722,7 +758,7 @@ function EditPetModal({ pet, onClose, onEdit }) {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[Colors.primary, '#1E3F66']}
+              colors={[Colors.primary, '#794B35']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.nextBtnGradient}
@@ -748,6 +784,35 @@ export default function PetsScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [petToEdit, setPetToEdit] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const hideNavbar = showAddModal || showEditModal;
+    navigation.setOptions({
+      tabBarStyle: { display: hideNavbar ? 'none' : 'flex' },
+    });
+  }, [showAddModal, showEditModal, navigation]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -6,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [floatAnim]);
 
   const activePet = selectedPet || (pets.length > 0 ? pets[0] : null);
 
@@ -826,7 +891,18 @@ export default function PetsScreen() {
       >
         {pets.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="paw" size={48} color={Colors.textMuted} style={{ marginBottom: 16 }} />
+            <Animated.View
+              style={[
+                styles.emptyMascotWrap,
+                { transform: [{ translateY: floatAnim }] },
+              ]}
+            >
+              <Image
+                source={require('../../assets/NoPetsYet.png')}
+                style={styles.emptyMascotImg}
+                resizeMode="contain"
+              />
+            </Animated.View>
             <Text style={styles.emptyTitle}>No Pets Yet</Text>
             <Text style={styles.emptySub}>
               Tap the + button to add your first furry friend!
@@ -849,8 +925,8 @@ export default function PetsScreen() {
             >
               <View style={styles.dropdownLeft}>
                 <View style={[styles.dropdownEmojiCircle, { backgroundColor: activePet?.accentColor || Colors.primary }]}>
-                  {activePet?.primaryPhotoUri ? (
-                    <Image source={{ uri: activePet.primaryPhotoUri }} style={styles.avatarImg} />
+                  {getPetPhotoUri(activePet) ? (
+                    <Image source={{ uri: getPetPhotoUri(activePet) }} style={styles.avatarImg} />
                   ) : (
                     <Ionicons name={activePet?.icon || 'paw'} size={20} color="#fff" />
                   )}
@@ -873,20 +949,14 @@ export default function PetsScreen() {
               >
                 <View style={styles.dashboardHeaderInner}>
                   <View style={styles.avatarCircle}>
-                    {activePet?.primaryPhotoUri ? (
-                      <Image source={{ uri: activePet.primaryPhotoUri }} style={styles.avatarImgLarge} />
+                    {getPetPhotoUri(activePet) ? (
+                      <Image source={{ uri: getPetPhotoUri(activePet) }} style={styles.avatarImgLarge} />
                     ) : (
                       <Ionicons name={activePet?.icon || 'paw'} size={28} color="#fff" />
                     )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.dashboardName}>{activePet?.name}</Text>
-                    <View style={styles.accuracyTagBadge}>
-                      <Ionicons name="sparkles" size={10} color="#fff" />
-                      <Text style={styles.accuracyTagText}>
-                        {calculateAccuracyScore(activePet?.referencePhotos)}% Match Score
-                      </Text>
-                    </View>
                   </View>
                   
                   {/* Action buttons (Edit & Delete) */}
@@ -1048,8 +1118,12 @@ export default function PetsScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.dropdownItemLeft}>
-                      <View style={[styles.itemEmojiCircle, { backgroundColor: pet.color }]}>
-                        <Text style={styles.itemEmoji}>{pet.emoji}</Text>
+                      <View style={[styles.itemEmojiCircle, { backgroundColor: pet.color || Colors.primaryBg, overflow: 'hidden' }]}>
+                        {getPetPhotoUri(pet) ? (
+                          <Image source={{ uri: getPetPhotoUri(pet) }} style={styles.avatarImg} />
+                        ) : (
+                          <Ionicons name={pet.icon || 'paw'} size={20} color={pet.accentColor || Colors.primary} />
+                        )}
                       </View>
                       <View>
                         <Text style={[styles.itemName, isActive && styles.itemNameActive]}>{pet.name}</Text>
@@ -1110,7 +1184,7 @@ export default function PetsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1, backgroundColor: Colors.background },
-  listContent: { padding: Spacing.md, paddingBottom: 40 },
+  listContent: { padding: Spacing.md, paddingBottom: 130 },
 
   // Header
   header: {
@@ -1230,7 +1304,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemActive: {
     borderColor: Colors.primary,
-    backgroundColor: '#EBF2FB',
+    backgroundColor: '#F3D9BF',
   },
   dropdownItemLeft: {
     flexDirection: 'row',
@@ -1421,7 +1495,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     flex: 1,
     paddingTop: Platform.OS === 'ios' ? 44 : 20,
-    paddingBottom: 30,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   addModalHeader: {
     flexDirection: 'row',
@@ -1441,7 +1515,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   accuracyCard: {
-    backgroundColor: '#EBF2FB',
+    backgroundColor: '#F3D9BF',
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.md,
@@ -1501,7 +1575,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#EBF2FB',
+    backgroundColor: '#F3D9BF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1631,7 +1705,7 @@ const styles = StyleSheet.create({
   },
   speciesBtnActive: {
     borderColor: Colors.primary,
-    backgroundColor: '#EBF2FB',
+    backgroundColor: '#F3D9BF',
   },
   speciesEmoji: { fontSize: 24 },
   speciesLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
@@ -1640,11 +1714,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 4,
+    marginBottom: 4,
   },
   colorDot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   colorDotSelected: {
     borderWidth: 3,
@@ -1772,7 +1849,18 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+    paddingVertical: 56,
+  },
+  emptyMascotWrap: {
+    width: 176,
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyMascotImg: {
+    width: 170,
+    height: 154,
   },
   emptyEmoji: { fontSize: 64, marginBottom: 16 },
   emptyTitle: {
@@ -1795,20 +1883,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   emptyAddBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  // Footer
-  addModalFooter: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    gap: Spacing.md,
-  },
-  backBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-  },
   viewAllRecordsBtn: {
     flexDirection: 'row',
     alignItems: 'center',

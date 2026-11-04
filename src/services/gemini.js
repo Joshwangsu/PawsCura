@@ -124,7 +124,7 @@ export async function analyzePetCondition(base64Image, mimeType, registeredPets 
             { condition: 'Allergic Dermatitis', confidence: 15 },
             { condition: 'Flea Bite Hypersensitivity', confidence: 10 },
           ],
-          urgencyLevel: 'Needs Evaluation',
+          urgencyLevel: 'Mild',
           analysis: matchedPet
             ? `I observe a localized area of redness and fur loss on ${matchedPet.name}. The image features closely match ${matchedPet.name}'s profile.`
             : 'I observe a localized area of redness, inflammation, and possible fur loss. It appears irritated and may be itchy or painful for the pet.',
@@ -162,7 +162,7 @@ Respond ONLY with a valid JSON object using these EXACT keys:
       "confidence": A number 0-100
     }
   ],
-  "urgencyLevel": "Exactly one of: 'No Concerns Detected', 'Needs Evaluation', or 'Immediate Care'",
+  "urgencyLevel": "Exactly one of: 'Safe', 'Mild', 'Moderate', or 'Urgent'",
   "analysis": "A 2-3 sentence description of visual observations and pet identification reasoning.",
   "recommendedAction": "A 1-2 sentence recommendation for the owner."
 }

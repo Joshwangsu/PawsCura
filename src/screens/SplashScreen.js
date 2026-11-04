@@ -56,7 +56,7 @@ export default function SplashScreen({ onFinish }) {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0F172A', '#1E3F66', '#091E36']}
+        colors={['#302B29', '#794B35', '#302B29']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#1E3F66',
+    backgroundColor: '#794B35',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#38BDF8',

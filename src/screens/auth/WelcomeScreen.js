@@ -17,25 +17,16 @@ const { width } = Dimensions.get('window');
 export default function WelcomeScreen({ navigation }) {
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#EBF2FB', '#1E3F66']}
-      locations={[0, 0.4, 1]}
+      colors={['#FFF8F1', '#F3D9BF', '#794B35']}
+      locations={[0, 0.45, 1]}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
-          {/* Header/Brand Section */}
-          <View style={styles.brandContainer}>
-            <View style={styles.logoRow}>
-              <Ionicons name="paw" size={32} color={Colors.primary} style={styles.logoIcon} />
-              <Text style={styles.appName}>PawsCura</Text>
-            </View>
-            <Text style={styles.tagline}>Your Pet's Health, Our Priority</Text>
-          </View>
-
-          {/* Hero Illustration Section */}
+          {/* Brand Logo (Logo with name under.png) */}
           <View style={styles.heroContainer}>
             <Image
-              source={require('../../../assets/Landing.png')}
+              source={require('../../../assets/Logo with name under.png')}
               style={styles.heroImage}
               resizeMode="contain"
             />
@@ -122,46 +113,19 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
   },
-  brandContainer: {
-    alignItems: 'center',
-    marginTop: Spacing.xs,
-    zIndex: 10,
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  logoIcon: {
-    marginTop: 2,
-  },
-  appName: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: Colors.primary,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-    marginTop: Spacing.xs,
-    letterSpacing: 0.5,
-  },
   heroContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 240,
-    marginTop: Spacing.xs,
-    marginBottom: -55,
-    zIndex: 1,
+    flex: 1,
+    maxHeight: 260,
+    marginVertical: Spacing.sm,
   },
   heroImage: {
-    width: width * 0.98,
-    height: 250,
+    width: width * 0.72,
+    height: 230,
   },
   featuresContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    backgroundColor: 'rgba(255, 248, 241, 0.95)',
     borderRadius: BorderRadius.xl,
     padding: Spacing.md,
     gap: Spacing.md,
@@ -170,7 +134,7 @@ const styles = StyleSheet.create({
     ...Shadows.lg,
     marginVertical: Spacing.xs,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: 'rgba(243, 217, 191, 0.8)',
   },
   featureItem: {
     flexDirection: 'row',
@@ -226,8 +190,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 248, 241, 0.45)',
+    backgroundColor: 'rgba(255, 248, 241, 0.12)',
   },
   secondaryBtnText: {
     color: Colors.textInverse,

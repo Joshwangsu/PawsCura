@@ -3,12 +3,24 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Image, Pla
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
+import { getPetPhotoUri } from './PetCard';
+import { useHealth } from '../context/HealthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 export default function HealthLogCard({ log, onPress }) {
   const [showModal, setShowModal] = useState(false);
   const navigation = useNavigation();
-  
+  const { pets } = useHealth();
+
+  // Find matching pet to show its profile photo, or fall back to the scan image
+  const matchedPet = pets?.find(
+    (p) =>
+      (log.petId && p.id === log.petId) ||
+      (log.petName && p.name && p.name.toLowerCase() === log.petName.toLowerCase())
+  );
+  const petPhotoUri = getPetPhotoUri(matchedPet) || log.imageUrl || log.imageUri || null;
+  const scanImageUri = log.imageUrl || log.imageUri || null;
+
   const handlePress = () => {
     if (onPress) onPress();
     else setShowModal(true);
@@ -16,115 +28,128 @@ export default function HealthLogCard({ log, onPress }) {
 
   return (
     <>
-    <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={handlePress}>
-      {/* Top row: date + status */}
-      <View style={styles.topRow}>
-        <View style={styles.dateRow}>
-          <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
-          <Text style={styles.date}>{log.date}</Text>
-        </View>
-        <StatusBadge status={log.status} size="sm" />
-      </View>
-
-      {/* Pet row */}
-      <View style={styles.petRow}>
-        <Text style={styles.petEmoji}>{log.petEmoji}</Text>
-        <View>
-          <Text style={styles.petName}>{log.petName}</Text>
-          <Text style={styles.breed}>{log.breed}</Text>
-        </View>
-      </View>
-
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* Issue */}
-      <Text style={styles.issue}>{log.issue}</Text>
-      <Text style={styles.description} numberOfLines={2}>
-        {log.description}
-      </Text>
-
-      {/* Footer: clinic + vet */}
-      <View style={styles.footerRow}>
-        <View style={styles.metaItem}>
-          <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.metaText} numberOfLines={1}>
-            {log.clinic}
-          </Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Ionicons name="person-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.metaText}>{log.vet}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-
-    {/* Record Details Modal */}
-    <Modal visible={showModal} animationType="slide" transparent={false} onRequestClose={() => setShowModal(false)}>
-      <View style={styles.modalFullContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Record Details</Text>
-          <TouchableOpacity onPress={() => setShowModal(false)}>
-            <Ionicons name="close" size={26} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-        
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>{log.date}</Text>
+      <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={handlePress}>
+        {/* Top row: date + status */}
+        <View style={styles.topRow}>
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.date}>{log.date}</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Status</Text>
-            <StatusBadge status={log.status} />
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Pet</Text>
-            <Text style={styles.detailValue}>{log.petEmoji} {log.petName}</Text>
-          </View>
-          
-          <View style={styles.divider} />
-          
-          <Text style={styles.detailLabel}>Condition</Text>
-          <Text style={styles.detailValuePrimary}>{log.issue}</Text>
-          
-          <Text style={[styles.detailLabel, { marginTop: Spacing.md }]}>Observations & Analysis</Text>
-          <Text style={styles.detailText}>{log.description}</Text>
+          <StatusBadge status={log.status} size="sm" />
+        </View>
 
-          {log.imageUrl && (
-            <View style={styles.scannedImageContainer}>
-              <Text style={[styles.detailLabel, { marginTop: Spacing.md, marginBottom: Spacing.xs }]}>Scanned Symptom Photo</Text>
-              <Image
-                source={{ uri: log.imageUrl }}
-                style={styles.scannedImage}
-                resizeMode="cover"
-              />
+        {/* Pet row with photo */}
+        <View style={styles.petRow}>
+          <View style={styles.petAvatarBox}>
+            {petPhotoUri ? (
+              <Image source={{ uri: petPhotoUri }} style={styles.petAvatarImg} resizeMode="cover" />
+            ) : log.petEmoji ? (
+              <Text style={styles.petEmoji}>{log.petEmoji}</Text>
+            ) : (
+              <Ionicons name="paw" size={20} color={Colors.primary} />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.petName} numberOfLines={1}>{log.petName}</Text>
+            <Text style={styles.breed} numberOfLines={1}>{log.breed}</Text>
+          </View>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Issue */}
+        <Text style={styles.issue}>{log.issue}</Text>
+        <Text style={styles.description} numberOfLines={2}>
+          {log.description}
+        </Text>
+
+        {/* Footer: clinic + vet */}
+        <View style={styles.footerRow}>
+          <View style={styles.metaItem}>
+            <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              {log.clinic}
+            </Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Ionicons name="person-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.metaText}>{log.vet}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* Record Details Modal */}
+      <Modal visible={showModal} animationType="slide" transparent={false} onRequestClose={() => setShowModal(false)}>
+        <View style={styles.modalFullContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Record Details</Text>
+            <TouchableOpacity onPress={() => setShowModal(false)}>
+              <Ionicons name="close" size={26} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>{log.date}</Text>
             </View>
-          )}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status</Text>
+              <StatusBadge status={log.status} />
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Pet</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {petPhotoUri ? (
+                  <Image source={{ uri: petPhotoUri }} style={styles.modalPetMiniAvatar} />
+                ) : null}
+                <Text style={styles.detailValue}>{log.petName}</Text>
+              </View>
+            </View>
 
-          <TouchableOpacity 
-            style={styles.chatbotLinkBtn}
-            onPress={() => {
-              const ctx = {
-                suspectedCondition: log.issue,
-                analysis: log.description,
-                petName: log.petName,
-                matchedPetName: log.petName,
-              };
-              setShowModal(false);
-              navigation.navigate('Chatbot', {
-                initialContext: ctx,
-                // Pass the health record ID so the chatbot can resume the linked session
-                scanRecordId: log.id || null,
-              });
-            }}
-          >
-            <Ionicons name="chatbubbles" size={18} color="#fff" />
-            <Text style={styles.chatbotLinkText}>Chat with Vet about this</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </Modal>
+            <View style={styles.divider} />
+
+            <Text style={styles.detailLabel}>Condition</Text>
+            <Text style={styles.detailValuePrimary}>{log.issue}</Text>
+
+            <Text style={[styles.detailLabel, { marginTop: Spacing.md }]}>Observations & Analysis</Text>
+            <Text style={styles.detailText}>{log.description}</Text>
+
+            {scanImageUri && (
+              <View style={styles.scannedImageContainer}>
+                <Text style={[styles.detailLabel, { marginTop: Spacing.md, marginBottom: Spacing.xs }]}>Scanned Symptom Photo</Text>
+                <Image
+                  source={{ uri: scanImageUri }}
+                  style={styles.scannedImage}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.chatbotLinkBtn}
+              onPress={() => {
+                const ctx = {
+                  suspectedCondition: log.issue,
+                  analysis: log.description,
+                  petName: log.petName,
+                  matchedPetName: log.petName,
+                };
+                setShowModal(false);
+                navigation.navigate('Chatbot', {
+                  initialContext: ctx,
+                  // Pass the health record ID so the chatbot can resume the linked session
+                  scanRecordId: log.id || null,
+                });
+              }}
+            >
+              <Ionicons name="chatbubbles" size={18} color="#fff" />
+              <Text style={styles.chatbotLinkText}>Chat with Vet about this</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -159,15 +184,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  petEmoji: {
-    fontSize: 28,
-    width: 40,
-    height: 40,
-    textAlign: 'center',
-    lineHeight: 40,
+  petAvatarBox: {
+    width: 44,
+    height: 44,
     backgroundColor: Colors.primaryBg,
-    borderRadius: BorderRadius.sm,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
+  },
+  petAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  petEmoji: {
+    fontSize: 24,
+  },
+  modalPetMiniAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   petName: {
     fontSize: 15,
@@ -208,7 +244,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     flex: 1,
   },
-  
+
   // Modal Styles
   modalFullContainer: {
     flex: 1,

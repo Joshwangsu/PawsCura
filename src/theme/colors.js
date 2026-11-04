@@ -1,43 +1,45 @@
 // Design tokens for PawsCura
+// Palette: #FFF8F1, #F3D9BF, #D88D59, #794B35, #302B29
 export const Colors = {
   // Primary
-  primary: '#2B5A8F',
-  primaryDark: '#1E3F66',
-  primaryLight: '#4A80B8',
-  primaryBg: '#EBF2FB',
+  primary: '#794B35',
+  primaryDark: '#302B29',
+  primaryLight: '#D88D59',
+  primaryBg: '#F3D9BF',
+  accent: '#D88D59',
 
   // Backgrounds
-  background: '#F8F9FA',
+  background: '#FFF8F1',
   card: '#FFFFFF',
-  inputBg: '#F1F5F9',
+  inputBg: '#FFF8F1',
 
   // Text
-  textPrimary: '#1A1A2E',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
-  textInverse: '#FFFFFF',
+  textPrimary: '#302B29',
+  textSecondary: '#794B35',
+  textMuted: '#9E8272',
+  textInverse: '#FFF8F1',
 
   // Status
   success: '#22C55E',
   successBg: '#DCFCE7',
-  warning: '#F59E0B',
-  warningBg: '#FEF3C7',
+  warning: '#D88D59',
+  warningBg: '#F3D9BF',
   danger: '#EF4444',
   dangerBg: '#FEE2E2',
-  info: '#3B82F6',
-  infoBg: '#DBEAFE',
+  info: '#D88D59',
+  infoBg: '#F3D9BF',
 
   // UI & Borders (Enforce visible 10%+ contrast edges)
-  border: '#D1D5DB',       // Distinct edge contrast (not light grey)
-  borderLight: '#E5E7EB',  // Subtle inner divider
-  borderStrong: '#9CA3AF', // Focused or emphasized border
-  shadow: '#000000',
-  divider: '#E5E7EB',
+  border: '#E5C5A8',       // Distinct warm edge contrast
+  borderLight: '#F3D9BF',  // Subtle inner divider
+  borderStrong: '#D88D59', // Focused or emphasized border
+  shadow: '#302B29',
+  divider: '#F3D9BF',
 
   // Tab bar
-  tabActive: '#2B5A8F',
-  tabInactive: '#9CA3AF',
-  tabBar: '#FFFFFF',
+  tabActive: '#794B35',
+  tabInactive: '#9E8272',
+  tabBar: '#FFF8F1',
 };
 
 export const Spacing = {

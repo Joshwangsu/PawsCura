@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Image,
   ScrollView,
   Platform,
   ActivityIndicator,
@@ -195,7 +196,8 @@ export default function SignupScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#1E3F66']}
+      colors={['#FFF8F1', '#F3D9BF', '#794B35']}
+      locations={[0, 0.45, 1]}
       style={styles.gradient}
     >
       <KeyboardAvoidingView
@@ -210,14 +212,29 @@ export default function SignupScreen({ navigation }) {
 
           {/* Brand Header */}
           <View style={styles.brandContainer}>
-            <Text style={styles.appName}>PawsCura</Text>
-            <Text style={styles.tagline}>Join the Pet Health Community</Text>
+            <Image
+              source={require('../../../assets/Logo with name horizontal.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Celebrating Kitten Mascot perched on top of the Signup Card */}
+          <View style={styles.heroSection}>
+            <View style={styles.mascotGlow} />
+            <Image
+              source={require('../../../assets/Create.png')}
+              style={styles.mascot}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Create Account</Text>
-            <Text style={styles.cardSubtitle}>Get started with your pet's health journey</Text>
+            <View style={styles.cardHeaderCenter}>
+              <Text style={styles.cardTitle}>Create Account</Text>
+              <Text style={styles.cardSubtitle}>Get started with your pet's health journey</Text>
+            </View>
             
             {errors.form && (
               <View style={styles.formErrorBox}>
@@ -440,40 +457,64 @@ const styles = StyleSheet.create({
 
   brandContainer: {
     alignItems: 'flex-start',
-    marginTop: 10,
-    marginBottom: 16,
-    zIndex: 1,
+    marginTop: 6,
+    marginBottom: 2,
+    zIndex: 2,
   },
-  appName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: -0.5,
+  brandLogo: {
+    width: 195,
+    height: 56,
+    marginLeft: -4,
   },
-  tagline: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 4,
+  heroSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: -9,
+    zIndex: 2,
+  },
+  mascotGlow: {
+    position: 'absolute',
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    backgroundColor: 'rgba(255, 248, 241, 0.62)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(216, 141, 89, 0.28)',
+    bottom: 8,
+  },
+  mascot: {
+    width: 144,
+    height: 205,
+    zIndex: 2,
   },
   card: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 24,
+    paddingBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(216, 141, 89, 0.22)',
     ...Shadows.lg,
     marginBottom: Spacing.lg,
     marginTop: 0,
     zIndex: 1,
   },
+  cardHeaderCenter: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 23,
     fontWeight: '800',
     color: Colors.textPrimary,
     marginBottom: 4,
+    textAlign: 'center',
   },
   cardSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
+    textAlign: 'center',
   },
   formErrorBox: {
     flexDirection: 'row',

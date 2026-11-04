@@ -177,7 +177,7 @@ export default function SettingsScreen({ navigation }) {
 
           {isPremium ? (
             <LinearGradient
-              colors={['#1E3F66', Colors.primaryLight]}
+              colors={['#794B35', Colors.primaryLight]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.membershipCardActive}

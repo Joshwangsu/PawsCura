@@ -5,45 +5,52 @@ import { Colors, BorderRadius, Spacing } from '../theme/colors';
 
 const STATUS_CONFIG = {
   Safe: {
-    bg: Colors.successBg,
-    border: '#A7F3D0', // light emerald border
-    text: '#059669', // darker emerald text
+    bg: '#DCFCE7', // emerald-100
+    border: '#A7F3D0',
+    text: '#059669',
     icon: 'shield-checkmark-outline',
     label: 'Safe — No Action',
   },
-  Urgent: {
-    bg: Colors.dangerBg,
-    border: '#FECACA', // light red border
-    text: '#DC2626', // darker red text
-    icon: 'time-outline',
-    label: 'Urgent — See Vet',
+  Mild: {
+    bg: '#E0F2FE', // sky-100
+    border: '#BAE6FD',
+    text: '#0284C7',
+    icon: 'information-circle-outline',
+    label: 'Mild — Low Concern',
   },
   Moderate: {
-    bg: Colors.warningBg,
-    border: '#FDE68A', // light amber border
-    text: '#D97706', // darker amber text
+    bg: '#FEF3C7', // amber-100
+    border: '#FDE68A',
+    text: '#D97706',
     icon: 'warning-outline',
     label: 'Moderate — Monitor',
   },
+  Urgent: {
+    bg: '#FEE2E2', // red-100
+    border: '#FECACA',
+    text: '#DC2626',
+    icon: 'alert-circle-outline',
+    label: 'Urgent — See Vet',
+  },
   'No Concerns Detected': {
-    bg: Colors.successBg,
+    bg: '#DCFCE7',
     border: '#A7F3D0',
     text: '#059669',
     icon: 'shield-checkmark-outline',
     label: 'Safe — No Action',
   },
   'Needs Evaluation': {
-    bg: Colors.warningBg,
+    bg: '#FEF3C7',
     border: '#FDE68A',
     text: '#D97706',
     icon: 'warning-outline',
     label: 'Moderate — Monitor',
   },
   'Immediate Care': {
-    bg: Colors.dangerBg,
+    bg: '#FEE2E2',
     border: '#FECACA',
     text: '#DC2626',
-    icon: 'time-outline',
+    icon: 'alert-circle-outline',
     label: 'Urgent — See Vet',
   },
   Open: {
@@ -63,7 +70,12 @@ const STATUS_CONFIG = {
 };
 
 export default function StatusBadge({ status, size = 'md' }) {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.Safe;
+  const normalizedKey = status
+    ? Object.keys(STATUS_CONFIG).find(
+        (k) => k.toLowerCase() === String(status).trim().toLowerCase()
+      )
+    : null;
+  const config = (normalizedKey && STATUS_CONFIG[normalizedKey]) || STATUS_CONFIG.Safe;
   const isSmall = size === 'sm';
 
   return (

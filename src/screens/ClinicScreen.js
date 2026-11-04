@@ -155,9 +155,6 @@ export default function ClinicScreen() {
             {filtered.length} veterinary clinics nearby
           </Text>
         </View>
-        <TouchableOpacity style={styles.filterBtn}>
-          <Ionicons name="options-outline" size={20} color={Colors.primary} />
-        </TouchableOpacity>
       </View>
 
       {/* Active Route Banner */}
@@ -532,7 +529,7 @@ const styles = StyleSheet.create({
   listTitle: { fontSize: 17, fontWeight: '800', color: Colors.textPrimary },
   sortRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
-  listContent: { paddingBottom: 30 },
+  listContent: { paddingBottom: 130 },
 
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.textSecondary },

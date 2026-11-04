@@ -243,7 +243,7 @@ export default function ChatbotScreen({ route, navigation }) {
       <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.aiBubble]}>
         {!isUser && (
           <View style={styles.aiAvatar}>
-            <Image source={require('../../assets/dog-chathead.png')} style={styles.chatheadImg} />
+            <Image source={require('../../assets/chatbot-head.png')} style={styles.chatheadImg} />
           </View>
         )}
         <View style={[styles.messageContent, isUser ? styles.userContent : styles.aiContent]}>
@@ -269,8 +269,10 @@ export default function ChatbotScreen({ route, navigation }) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleContainer}>
-          <View style={styles.headerAvatar}>
-            <Image source={require('../../assets/dog-chathead.png')} style={styles.chatheadImg} />
+          <View style={styles.headerAvatarWrap}>
+            <View style={styles.headerAvatar}>
+              <Image source={require('../../assets/chatbot-head.png')} style={styles.chatheadImg} />
+            </View>
             <View style={styles.onlineBadge} />
           </View>
           <View style={{ flex: 1 }}>
@@ -397,13 +399,16 @@ export default function ChatbotScreen({ route, navigation }) {
               style={styles.historyNewChatGradient}
             >
               <View style={styles.historyNewChatIcon}>
-                <Ionicons name="add-circle" size={26} color="#fff" />
+                <Image
+                  source={require('../../assets/chatbot.png')}
+                  style={styles.historyNewChatMascot}
+                />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.historyNewChatTitle}>Start New Consultation</Text>
                 <Text style={styles.historyNewChatSub}>Ask questions about a new symptom or pet</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#fff" />
+              <Ionicons name="add-circle" size={26} color="#fff" />
             </LinearGradient>
           </TouchableOpacity>
 
@@ -565,22 +570,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#fff',
-    borderRadius: 20,
+  headerAvatarWrap: {
+    width: 44,
+    height: 44,
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+  },
+  headerAvatar: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#FFF8F1',
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.75)',
   },
   chatheadImg: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    width: '96%',
+    height: '96%',
+    resizeMode: 'contain',
   },
   onlineBadge: {
     position: 'absolute',
@@ -591,7 +602,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.success,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: Colors.primaryLight,
+    borderColor: '#FFF8F1',
   },
   headerTitle: {
     color: '#fff',
@@ -649,16 +660,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   aiAvatar: {
-    width: 28,
-    height: 28,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    backgroundColor: '#FFF8F1',
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
     marginTop: 4,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.primaryLight,
   },
   messageContent: {
@@ -891,12 +902,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   historyNewChatIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFF8F1',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  historyNewChatMascot: {
+    width: 44,
+    height: 48,
+    resizeMode: 'contain',
+    marginTop: 2,
   },
   historyNewChatTitle: {
     color: '#fff',
@@ -934,14 +954,14 @@ const styles = StyleSheet.create({
   },
   historyCardActive: {
     borderColor: Colors.primary,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: Colors.primaryBg,
     borderWidth: 1.5,
   },
   historyCardIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    backgroundColor: 'rgba(216, 141, 89, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },

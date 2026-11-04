@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Modal
+  Modal,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -94,7 +95,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.premiumBannerContainer}>
           {isPremium ? (
             <LinearGradient
-              colors={['#1E3F66', Colors.primary]}
+              colors={['#794B35', Colors.primary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.premiumBanner}
@@ -149,12 +150,23 @@ export default function HomeScreen({ navigation }) {
               activeOpacity={0.7}
               onPress={() => navigation.navigate('Pets')}
             >
-              <View style={styles.emptyIconBox}>
-                <Ionicons name="paw-outline" size={32} color={Colors.primary} />
-              </View>
+              <Image
+                source={require('../../assets/NoPetsYet.png')}
+                style={styles.emptyPetMascot}
+                resizeMode="contain"
+              />
               <Text style={styles.emptyTitle}>No Pets Added</Text>
               <Text style={styles.emptySubtext}>Tap here to register your first furry friend!</Text>
             </TouchableOpacity>
+          ) : pets.length === 1 ? (
+            <View style={{ paddingHorizontal: Spacing.md }}>
+              <PetCard
+                pet={pets[0]}
+                fullWidth
+                isSelected={selectedPet === pets[0].id}
+                onPress={() => setSelectedPet(pets[0].id)}
+              />
+            </View>
           ) : (
             <FlatList
               data={pets}
@@ -192,9 +204,11 @@ export default function HomeScreen({ navigation }) {
               activeOpacity={0.7}
               onPress={() => navigation.navigate('Scan')}
             >
-              <View style={styles.emptyIconBox}>
-                <Ionicons name="scan-outline" size={32} color={Colors.primary} />
-              </View>
+              <Image
+                source={require('../../assets/NoHealthRecords.png')}
+                style={styles.emptyHealthMascot}
+                resizeMode="contain"
+              />
               <Text style={styles.emptyTitle}>No Health Records</Text>
               <Text style={styles.emptySubtext}>Use the AI Assessment tool to generate a health report.</Text>
             </TouchableOpacity>
@@ -255,7 +269,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: { paddingBottom: 30 },
+  content: { paddingBottom: 130 },
 
   // Header
   header: {
@@ -341,6 +355,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
+  emptyPetMascot: {
+    width: 128,
+    height: 115,
+    marginBottom: Spacing.sm,
+  },
+  emptyHealthMascot: {
+    width: 112,
+    height: 135,
+    marginBottom: Spacing.sm,
+  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -422,7 +446,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xl,
   },
   lastSection: {
-    marginBottom: Spacing.md,
+    marginBottom: 110,
   },
   sectionHeader: {
     flexDirection: 'row',

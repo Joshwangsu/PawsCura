@@ -13,15 +13,15 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors, Shadows } from '../theme/colors';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const BUTTON_SIZE = 60;
+const BUTTON_SIZE = 64;
 
 export default function DraggableChatbot() {
   const navigation = useNavigation();
   
-  // Starting position at the bottom right
+  // Starting position at the bottom right (above the floating pill navbar)
   const pan = useRef(new Animated.ValueXY({
     x: SCREEN_WIDTH - BUTTON_SIZE - 20,
-    y: SCREEN_HEIGHT - BUTTON_SIZE - 100 
+    y: SCREEN_HEIGHT - BUTTON_SIZE - 125 
   })).current;
 
   const panResponder = useRef(
@@ -79,13 +79,15 @@ export default function DraggableChatbot() {
     >
       <TouchableOpacity 
         style={styles.button}
-        activeOpacity={0.8}
+        activeOpacity={0.85}
         onPress={() => navigation.navigate('Chatbot')}
       >
-        <Image 
-          source={require('../../assets/dog-chathead.png')} 
-          style={styles.chatheadImg}
-        />
+        <View style={styles.avatarClip}>
+          <Image 
+            source={require('../../assets/chatbot-head-q.png')} 
+            style={styles.chatheadImg}
+          />
+        </View>
         <View style={styles.badge} />
       </TouchableOpacity>
     </Animated.View>
@@ -101,29 +103,36 @@ const styles = StyleSheet.create({
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     borderRadius: BUTTON_SIZE / 2,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FFF8F1',
     justifyContent: 'center',
     alignItems: 'center',
     ...Shadows.lg,
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: Colors.primary,
-    overflow: 'hidden',
-    backgroundColor: '#fff'
   },
-  chatheadImg: {
+  avatarClip: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover'
+    borderRadius: BUTTON_SIZE / 2,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  chatheadImg: {
+    width: '94%',
+    height: '94%',
+    resizeMode: 'contain',
   },
   badge: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: Colors.success,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#FFF8F1',
   }
 });

@@ -45,8 +45,8 @@ const ANALYSIS_STEPS = [
 ];
 
 // Brand accent used in the loading modal (10% accent rule)
-const MODAL_ACCENT = '#63B3ED'; // blue-300 — visible against dark overlay
-const MODAL_ACCENT_DIM = 'rgba(99,179,237,0.18)'; // tinted surface, not same as border
+const MODAL_ACCENT = '#D88D59'; // warm terracotta accent — visible against dark overlay
+const MODAL_ACCENT_DIM = 'rgba(216,141,89,0.18)'; // tinted surface, not same as border
 
 function ScanLoadingModal({ visible, ads = [] }) {
   const insets = useSafeAreaInsets();
@@ -226,6 +226,12 @@ export default function ScanScreen() {
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
+    navigation.setOptions({
+      tabBarStyle: { display: (loading || saving) ? 'none' : 'flex' },
+    });
+  }, [loading, saving, navigation]);
+
+  useEffect(() => {
     if (result && !loading) {
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({ y: 350, animated: true });
@@ -372,7 +378,7 @@ export default function ScanScreen() {
         breed: pet.breed || '',
         issue: analysis.suspectedCondition || 'Unspecified Condition',
         description: analysis.analysis || '',
-        status: analysis.urgencyLevel || 'Needs Evaluation',
+        status: analysis.urgencyLevel || 'Moderate',
         recommendedAction: analysis.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
@@ -425,7 +431,7 @@ export default function ScanScreen() {
         breed: petToSave.breed || '',
         issue: result.suspectedCondition || 'Unspecified Condition',
         description: result.analysis || '',
-        status: result.urgencyLevel || 'Needs Evaluation',
+        status: result.urgencyLevel || 'Moderate',
         recommendedAction: result.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
@@ -462,10 +468,20 @@ export default function ScanScreen() {
 
 
   const getUrgencyColor = (urgency) => {
-    switch (urgency?.toLowerCase()) {
-      case 'no concerns detected': return Colors.success;
-      case 'immediate care': return Colors.danger;
-      default: return Colors.warning;
+    switch (urgency?.toLowerCase()?.trim()) {
+      case 'safe':
+      case 'no concerns detected':
+        return Colors.success;
+      case 'mild':
+        return '#0EA5E9';
+      case 'moderate':
+      case 'needs evaluation':
+        return '#F59E0B';
+      case 'urgent':
+      case 'immediate care':
+        return Colors.danger;
+      default:
+        return Colors.warning;
     }
   };
 
@@ -685,7 +701,7 @@ export default function ScanScreen() {
             disabled={loading}
           >
             <LinearGradient
-              colors={['#1E3F66', Colors.primary]}
+              colors={[Colors.primaryDark, Colors.primary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.scanBtn}
@@ -853,7 +869,7 @@ const styles = StyleSheet.create({
   bodyContent: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.lg,
-    paddingBottom: 20,
+    paddingBottom: 130,
   },
 
   // Viewfinder
@@ -997,12 +1013,12 @@ const styles = StyleSheet.create({
   autoSavingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF2FB',
+    backgroundColor: '#F3D9BF',
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#D88D59',
     gap: 10,
   },
   autoMatchedBanner: {
@@ -1457,7 +1473,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#EBF2FB',
+    backgroundColor: '#F3D9BF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1478,7 +1494,7 @@ const styles = StyleSheet.create({
 //   Rule 1: No nested same-surface cards
 //   Rule 2: All borders are visibly darker than their backgrounds
 //   Rule 3: No emoji — Ionicons throughout
-//   Rule 5: 60-30-10 — dark overlay (60%), tinted badge surface (30%), accent blue (10%)
+//   Rule 5: 60-30-10 — dark overlay (60%), tinted badge surface (30%), warm accent (10%)
 const SCAN_CORNER = 16; // corner bracket px
 const SCAN_THICK  = 2.5; // corner bracket stroke
 
@@ -1486,7 +1502,7 @@ const scanModal = StyleSheet.create({
   // Dark translucent canvas with safe area padding to prevent cramping at the top
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(4, 12, 28, 0.98)',
+    backgroundColor: 'rgba(48, 43, 41, 0.98)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
@@ -1499,7 +1515,7 @@ const scanModal = StyleSheet.create({
     height: 90,
     borderRadius: 45,
     borderWidth: 1,
-    borderColor: 'rgba(99, 179, 237, 0.22)',
+    borderColor: 'rgba(216, 141, 89, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1509,12 +1525,12 @@ const scanModal = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: 'rgba(99, 179, 237, 0.14)',
+    backgroundColor: 'rgba(216, 141, 89, 0.16)',
     borderWidth: 1.5,
-    borderColor: 'rgba(99, 179, 237, 0.55)',
+    borderColor: 'rgba(216, 141, 89, 0.60)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#63B3ED',
+    shadowColor: '#D88D59',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
@@ -1534,7 +1550,7 @@ const scanModal = StyleSheet.create({
     position: 'absolute',
     width: SCAN_CORNER,
     height: SCAN_CORNER,
-    borderColor: '#63B3ED',  // 10% accent
+    borderColor: '#D88D59',  // 10% accent
   },
   cornerTL: {
     top: 0, left: 0,
@@ -1566,8 +1582,8 @@ const scanModal = StyleSheet.create({
     position: 'absolute',
     top: 0, left: 0, right: 0,
     height: 2,
-    backgroundColor: '#63B3ED',
-    shadowColor: '#63B3ED',
+    backgroundColor: '#D88D59',
+    shadowColor: '#D88D59',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 6,
@@ -1580,7 +1596,7 @@ const scanModal = StyleSheet.create({
     bottom: 4,
     fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(99,179,237,0.60)',
+    color: 'rgba(243,217,191,0.75)',
     letterSpacing: 3,
   },
 
@@ -1595,16 +1611,16 @@ const scanModal = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(99,179,237,0.15)',
+    backgroundColor: 'rgba(216,141,89,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(99,179,237,0.40)',
+    borderColor: 'rgba(216,141,89,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.92)',
+    color: '#FFF8F1',
     letterSpacing: 0.2,
   },
 
@@ -1617,10 +1633,10 @@ const scanModal = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(243,217,191,0.22)',
   },
   dotActive: {
-    backgroundColor: '#63B3ED',
+    backgroundColor: '#D88D59',
     width: 16,
     borderRadius: 3,
   },

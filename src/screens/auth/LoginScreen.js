@@ -82,7 +82,8 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#1E3F66']}
+      colors={['#FFF8F1', '#F3D9BF', '#794B35']}
+      locations={[0, 0.45, 1]}
       style={styles.gradient}
     >
       <KeyboardAvoidingView
@@ -94,16 +95,20 @@ export default function LoginScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Brand Top Left */}
-          <View style={styles.brandContainer}>
-            <Text style={styles.appName}>PawsCura</Text>
-            <Text style={styles.tagline}>Your Pet's Health, Our Priority</Text>
+          {/* Top Brand Header */}
+          <View style={styles.brandHeader}>
+            <Image
+              source={require('../../../assets/Logo with name horizontal.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Mascot */}
+          {/* Waving Puppy Mascot perched on top of the Login Card */}
           <View style={styles.heroSection}>
+            <View style={styles.mascotGlow} />
             <Image
-              source={require('../../../assets/Landing.png')}
+              source={require('../../../assets/Login.png')}
               style={styles.mascot}
               resizeMode="contain"
             />
@@ -111,8 +116,10 @@ export default function LoginScreen({ navigation }) {
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Welcome Back!</Text>
-            <Text style={styles.cardSubtitle}>Login to manage your pet's health</Text>
+            <View style={styles.cardHeaderCenter}>
+              <Text style={styles.cardTitle}>Welcome Back!</Text>
+              <Text style={styles.cardSubtitle}>Login to manage your pet's health</Text>
+            </View>
             
             {errors.form && (
               <View style={styles.formErrorBox}>
@@ -216,59 +223,68 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: 80,
-    paddingBottom: 40,
+    paddingTop: 50,
+    paddingBottom: 36,
+    justifyContent: 'center',
   },
-  brandContainer: {
+  brandHeader: {
     alignItems: 'flex-start',
-    marginTop: 0,
-    marginBottom: 10,
-    zIndex: 1,
+    marginBottom: 4,
+    zIndex: 2,
+  },
+  brandLogo: {
+    width: 195,
+    height: 56,
+    marginLeft: -4,
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: Spacing.lg,
-    paddingTop: 0,
+    justifyContent: 'center',
+    marginBottom: -10,
+    zIndex: 2,
+  },
+  mascotGlow: {
+    position: 'absolute',
+    width: 164,
+    height: 164,
+    borderRadius: 82,
+    backgroundColor: 'rgba(255, 248, 241, 0.62)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(216, 141, 89, 0.28)',
+    top: 18,
   },
   mascot: {
-    width: 380,
-    height: 380,
-    marginBottom: 0,
-    marginTop: -10,
-    zIndex: 0,
-    transform: [{ scale: 1.1 }],
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 4,
-    letterSpacing: 0.3,
+    width: 172,
+    height: 195,
+    zIndex: 2,
   },
   card: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 24,
+    paddingBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(216, 141, 89, 0.22)',
     ...Shadows.lg,
     marginBottom: Spacing.lg,
-    marginTop: -140,
     zIndex: 1,
   },
+  cardHeaderCenter: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 23,
     fontWeight: '800',
     color: Colors.textPrimary,
     marginBottom: 4,
+    textAlign: 'center',
   },
   cardSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
+    textAlign: 'center',
   },
   formErrorBox: {
     flexDirection: 'row',
@@ -350,7 +366,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',

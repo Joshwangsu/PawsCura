@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Image,
   Dimensions,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,6 +31,28 @@ export default function HistoryScreen({ navigation }) {
   const { topBanners, popup } = useAds('records');
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedScan, setSelectedScan] = useState(null);
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -6,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [floatAnim]);
 
   // Filter logs based on urgency status selection
   const filteredLogs = useMemo(() => {
@@ -48,6 +72,9 @@ export default function HistoryScreen({ navigation }) {
       if (activeFilter === 'Moderate') {
         return logStatus === 'moderate' || logStatus === 'needs evaluation';
       }
+      if (activeFilter === 'Mild') {
+        return logStatus === 'mild';
+      }
       if (activeFilter === 'Safe') {
         return logStatus === 'safe' || logStatus === 'no concerns detected';
       }
@@ -58,7 +85,7 @@ export default function HistoryScreen({ navigation }) {
   // Bulletproof date parser to prevent any Invalid Date / NaN outputs
   const parseDate = (val) => {
     if (!val) return new Date(); // Fallback to now
-    
+
     // If it is a Firestore Timestamp
     if (typeof val.toDate === 'function') {
       return val.toDate();
@@ -69,18 +96,18 @@ export default function HistoryScreen({ navigation }) {
     if (typeof val.toMillis === 'function') {
       return new Date(val.toMillis());
     }
-    
+
     // If it is already a Date object
     if (val instanceof Date) {
       return val;
     }
-    
+
     // If it is a parseable timestamp number or string
     const d = new Date(val);
     if (!isNaN(d.getTime())) {
       return d;
     }
-    
+
     return new Date(); // Fallback to now
   };
 
@@ -139,7 +166,7 @@ export default function HistoryScreen({ navigation }) {
       {/* ── Header ────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerInfo}>
-          <Text style={styles.screenTitle}>Assessments History</Text>
+          <Text style={styles.screenTitle}>Assessment History</Text>
           <Text style={styles.screenSubtitle}>
             Timeline of skin health assessments ({filteredLogs.length})
           </Text>
@@ -148,12 +175,8 @@ export default function HistoryScreen({ navigation }) {
 
       {/* ── Filters ───────────────────────────────────── */}
       <View style={styles.filterContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          contentContainerStyle={styles.filterScroll}
-        >
-          {['All', 'Urgent', 'Moderate', 'Safe'].map((filter) => {
+        <View style={styles.filterRow}>
+          {['All', 'Safe', 'Mild', 'Moderate', 'Urgent'].map((filter) => {
             const isActive = activeFilter === filter;
             return (
               <TouchableOpacity
@@ -168,7 +191,7 @@ export default function HistoryScreen({ navigation }) {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
 
       <AdBanner ads={topBanners} dismissKey="records:top" />
@@ -182,9 +205,18 @@ export default function HistoryScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <View style={styles.emptyIconBox}>
-              <Ionicons name="document-text-outline" size={32} color={Colors.textMuted} />
-            </View>
+            <Animated.View
+              style={[
+                styles.emptyMascotWrap,
+                { transform: [{ translateY: floatAnim }] },
+              ]}
+            >
+              <Image
+                source={require('../../assets/NoHealthRecords.png')}
+                style={styles.emptyMascotImg}
+                resizeMode="contain"
+              />
+            </Animated.View>
             <Text style={styles.emptyTitle}>No Scans Recorded</Text>
             <Text style={styles.emptySubtitle}>
               {activeFilter === 'All'
@@ -205,7 +237,7 @@ export default function HistoryScreen({ navigation }) {
         renderItem={({ item }) => (
           <View style={styles.dateGroup}>
             <Text style={styles.dateGroupTitle}>{item.date}</Text>
-            
+
             {item.data.map((log, index) => {
               const scanImage = log.imageUrl || log.imageUri;
               return (
@@ -283,9 +315,9 @@ export default function HistoryScreen({ navigation }) {
                 <Ionicons name="close" size={26} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
-            
-            <ScrollView 
-              showsVerticalScrollIndicator={false} 
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
             >
               <View style={styles.modalMetaRow}>
@@ -312,7 +344,7 @@ export default function HistoryScreen({ navigation }) {
 
               <Text style={styles.modalSectionTitle}>Suspected Skin Condition</Text>
               <Text style={styles.modalConditionName}>{selectedScan.issue}</Text>
-              
+
               <Text style={[styles.modalSectionTitle, { marginTop: Spacing.md }]}>
                 AI Analysis & Recommendations
               </Text>
@@ -389,31 +421,37 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     paddingVertical: 10,
+    paddingHorizontal: Spacing.md,
     backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  filterScroll: {
-    paddingHorizontal: Spacing.md,
-    gap: 8,
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
   },
   filterCap: {
-    paddingHorizontal: 16,
+    flex: 1,
     paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterCapActive: {
-    backgroundColor: '#1E3F66',
-    borderColor: '#1E3F66',
+    backgroundColor: '#794B35',
+    borderColor: '#794B35',
     ...Shadows.sm,
   },
   filterCapText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
   filterCapTextActive: {
     color: '#fff',
@@ -421,7 +459,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: Spacing.md,
-    paddingBottom: 24,
+    paddingBottom: 130,
   },
   dateGroup: {
     marginBottom: Spacing.lg,
@@ -598,8 +636,19 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 80,
+    paddingTop: 56,
     paddingHorizontal: Spacing.xl,
+  },
+  emptyMascotWrap: {
+    width: 150,
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyMascotImg: {
+    width: 145,
+    height: 175,
   },
   emptyIconBox: {
     width: 64,

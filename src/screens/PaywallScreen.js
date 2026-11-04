@@ -215,7 +215,7 @@ export default function PaywallScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={[Colors.primaryDark, '#0B1D3A']}
+      colors={['#794B35', '#302B29']}
       style={styles.container}
     >
       <SafeAreaView style={styles.safe}>
@@ -467,7 +467,7 @@ export default function PaywallScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B1D3A',
+    backgroundColor: '#302B29',
   },
   safe: {
     flex: 1,
