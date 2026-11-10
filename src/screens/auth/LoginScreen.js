@@ -27,8 +27,9 @@ export default function LoginScreen({ navigation }) {
 
   const validate = () => {
     const errs = {};
-    if (!email.trim()) errs.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(email)) errs.email = 'Enter a valid email';
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) errs.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) errs.email = 'Enter a valid email';
     if (!password) errs.password = 'Password is required';
     else if (password.length < 6) errs.password = 'Password must be at least 6 characters';
     return errs;
@@ -44,12 +45,14 @@ export default function LoginScreen({ navigation }) {
     setIsLoading(true);
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       // Navigation is handled automatically by AppNavigator reacting to AuthContext
     } catch (error) {
       let errorMsg = 'Failed to log in. Please try again.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         errorMsg = 'Invalid email or password.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Please enter a valid email address.';
       } else if (error.code === 'auth/too-many-requests') {
         errorMsg = 'Too many failed attempts. Try again later.';
       }

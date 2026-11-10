@@ -26,6 +26,7 @@ import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAds } from '../services/ads';
 import { AdRichCard } from '../components/AdRich';
+import { getPetPhotoUri } from '../components/PetCard';
 
 const SCAN_MIN_SECONDS = 5;
 
@@ -308,8 +309,18 @@ export default function ScanScreen() {
 
       let pickerResult;
       if (useCamera) {
+        const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+        if (camPerm.status !== 'granted') {
+          Alert.alert('Permission Required', 'Please enable camera access in your device settings to scan your pet.');
+          return;
+        }
         pickerResult = await ImagePicker.launchCameraAsync(options);
       } else {
+        const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (libPerm.status !== 'granted') {
+          Alert.alert('Permission Required', 'Please enable photo library access in your device settings to upload a photo.');
+          return;
+        }
         pickerResult = await ImagePicker.launchImageLibraryAsync(options);
       }
 
@@ -355,7 +366,7 @@ export default function ScanScreen() {
           }
         } catch (error) {
           console.error('Scan error:', error);
-          alert("Failed to analyze image. Please try again.");
+          Alert.alert('Analysis Failed', 'Failed to analyze image. Please check your connection and try again.');
         } finally {
           setLoading(false);
         }
@@ -777,8 +788,14 @@ export default function ScanScreen() {
                   activeOpacity={0.7}
                   onPress={() => handleSaveToRecords(pet)}
                 >
-                  <View style={[styles.petSelectLeft, { backgroundColor: pet.color }]}>
-                    <Text style={{ fontSize: 24 }}>{pet.emoji}</Text>
+                  <View style={[styles.petSelectLeft, { backgroundColor: pet.color || Colors.primaryBg, overflow: 'hidden' }]}>
+                    {getPetPhotoUri(pet) ? (
+                      <Image source={{ uri: getPetPhotoUri(pet) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : pet.emoji ? (
+                      <Text style={{ fontSize: 24 }}>{pet.emoji}</Text>
+                    ) : (
+                      <Ionicons name={pet.icon || 'paw'} size={22} color={pet.accentColor || Colors.primary} />
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.petSelectName}>{pet.name}</Text>
@@ -808,7 +825,7 @@ export default function ScanScreen() {
               activeOpacity={0.8}
               onPress={() => {
                 setShowSuccessModal(false);
-                navigation.navigate('History');
+                navigation.navigate('Records');
               }}
             >
               <Text style={styles.successPrimaryBtnText}>View Records</Text>

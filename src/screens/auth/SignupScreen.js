@@ -116,7 +116,7 @@ export default function SignupScreen({ navigation }) {
     setIsSigningUp(true);
     
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
       
       // Update the user's display name with first + last name
       const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
@@ -400,8 +400,29 @@ export default function SignupScreen({ navigation }) {
               <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
               <Text style={styles.termsText}>
                 By creating an account you agree to our{' '}
-                <Text style={styles.termsLink}>Terms of Service</Text> &{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
+                <Text
+                  style={styles.termsLink}
+                  onPress={() =>
+                    Alert.alert(
+                      'Terms of Service',
+                      'PawsCura provides AI-assisted pet health assessments for informational purposes only and is not a substitute for professional veterinary diagnosis or treatment.'
+                    )
+                  }
+                >
+                  Terms of Service
+                </Text>{' '}
+                &{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() =>
+                    Alert.alert(
+                      'Privacy Policy',
+                      'Your pet profiles, uploaded photos, and diagnostic history are securely stored in your private account and used solely to personalize your PawsCura veterinary experience.'
+                    )
+                  }
+                >
+                  Privacy Policy
+                </Text>
               </Text>
             </View>
 

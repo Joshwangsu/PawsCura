@@ -13,14 +13,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signOut, updateProfile } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 export default function SettingsScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, reloadUser } = useAuth();
   const { isPremium } = useSubscription();
 
   const [settingsName, setSettingsName] = useState(user?.displayName || '');
@@ -31,23 +31,27 @@ export default function SettingsScreen({ navigation }) {
   const initial = displayName.charAt(0).toUpperCase();
 
   const handleSaveSettings = async () => {
-    if (!settingsName.trim()) {
+    const trimmedName = settingsName.trim();
+    if (!trimmedName) {
       Alert.alert('Error', 'Display Name cannot be empty.');
       return;
     }
     setIsSavingSettings(true);
     try {
-      // 1. Update Auth profile cache
+      // 1. Update Auth profile cache and reload AuthContext state
       await updateProfile(auth.currentUser, {
-        displayName: settingsName.trim()
+        displayName: trimmedName
       });
+      if (reloadUser) {
+        await reloadUser();
+      }
 
-      // 2. Update Firestore user document
+      // 2. Update Firestore user document safely with merge
       const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, {
-        username: settingsName.trim().split('@')[0],
+      await setDoc(userDocRef, {
+        username: trimmedName,
         email: settingsEmail.trim()
-      });
+      }, { merge: true });
 
       Alert.alert('Success', 'Your profile settings have been updated!');
     } catch (error) {

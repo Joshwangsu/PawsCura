@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
@@ -34,7 +33,6 @@ export default function ClinicScreen() {
   const { topBanners } = useAds('clinics');
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
-  const [search, setSearch] = useState('');
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [clinics, setClinics] = useState([]);
@@ -84,15 +82,7 @@ export default function ClinicScreen() {
     loadLocation();
   }, []);
 
-  let filtered = clinics.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.address.toLowerCase().includes(search.toLowerCase())
-  );
-
-  if (!isPremium) {
-    filtered = filtered.slice(0, 3);
-  }
+  const filtered = isPremium ? clinics : clinics.slice(0, 3);
 
   const fetchRoutePath = async (origin, destination) => {
     const directLine = [
@@ -274,9 +264,9 @@ export default function ClinicScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
+              <Ionicons name="location-outline" size={48} color={Colors.textMuted} />
               <Text style={styles.emptyTitle}>No clinics found</Text>
-              <Text style={styles.emptySubtitle}>Try adjusting your search query</Text>
+              <Text style={styles.emptySubtitle}>No veterinary clinics found in this area</Text>
             </View>
           }
         />
@@ -482,14 +472,6 @@ const styles = StyleSheet.create({
   },
   routeActiveText: { color: Colors.textInverse, fontSize: 15, fontWeight: '700', flex: 1, marginRight: Spacing.sm },
   clearRouteBtn: { padding: 2 },
-
-  searchWrapper: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, gap: Spacing.sm,
-    ...Shadows.sm, borderWidth: 1, borderColor: Colors.border,
-  },
-  searchInput: { flex: 1, height: 46, fontSize: 15, color: Colors.textPrimary },
 
   mapContainer: {
     height: SCREEN_HEIGHT * 0.28,

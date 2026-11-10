@@ -39,16 +39,6 @@ export default function HomeScreen({ navigation }) {
     return 'Good Evening!';
   };
 
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Logout Error:', error);
-    }
-  };
-
   return (
     <View style={styles.safe}>
       <ScrollView
@@ -138,7 +128,11 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Pets</Text>
-            <TouchableOpacity style={styles.seeAllBtn}>
+            <TouchableOpacity
+              style={styles.seeAllBtn}
+              onPress={() => navigation.navigate('Pets')}
+              activeOpacity={0.7}
+            >
               <Text style={styles.seeAllText}>See All</Text>
               <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
             </TouchableOpacity>
@@ -164,7 +158,10 @@ export default function HomeScreen({ navigation }) {
                 pet={pets[0]}
                 fullWidth
                 isSelected={selectedPet === pets[0].id}
-                onPress={() => setSelectedPet(pets[0].id)}
+                onPress={() => {
+                  setSelectedPet(pets[0].id);
+                  navigation.navigate('Pets', { petId: pets[0].id });
+                }}
               />
             </View>
           ) : (
@@ -178,7 +175,10 @@ export default function HomeScreen({ navigation }) {
                 <PetCard
                   pet={item}
                   isSelected={selectedPet === item.id}
-                  onPress={() => setSelectedPet(item.id)}
+                  onPress={() => {
+                    setSelectedPet(item.id);
+                    navigation.navigate('Pets', { petId: item.id });
+                  }}
                 />
               )}
             />
@@ -191,7 +191,8 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.sectionTitle}>Recent Activity</Text>
             <TouchableOpacity
               style={styles.seeAllBtn}
-              onPress={() => navigation.navigate('History')}
+              onPress={() => navigation.navigate('Records')}
+              activeOpacity={0.7}
             >
               <Text style={styles.seeAllText}>View All</Text>
               <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
@@ -219,43 +220,6 @@ export default function HomeScreen({ navigation }) {
           )}
         </View>
       </ScrollView>
-
-      {/* Logout Custom Modal */}
-      <Modal
-        visible={showLogoutModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowLogoutModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.logoutModal}>
-            <View style={styles.logoutIconBox}>
-              <Ionicons name="log-out-outline" size={32} color={Colors.danger} />
-            </View>
-            <Text style={styles.logoutTitle}>Log Out</Text>
-            <Text style={styles.logoutSubtext}>Are you sure you want to log out of your account?</Text>
-            
-            <View style={styles.logoutActions}>
-              <TouchableOpacity 
-                style={styles.logoutCancelBtn} 
-                onPress={() => setShowLogoutModal(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.logoutCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.logoutConfirmBtn} 
-                onPress={handleLogout}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.logoutConfirmText}>Log Out</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-
     </View>
   );
 }

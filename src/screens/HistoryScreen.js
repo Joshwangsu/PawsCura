@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import StatusBadge from '../components/StatusBadge';
+import { getPetPhotoUri } from '../components/PetCard';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { useAds } from '../services/ads';
 import AdBanner from '../components/AdBanner';
@@ -54,35 +55,7 @@ export default function HistoryScreen({ navigation }) {
     return () => loop.stop();
   }, [floatAnim]);
 
-  // Filter logs based on urgency status selection
-  const filteredLogs = useMemo(() => {
-    // Sort logs descending by date first
-    const sorted = [...healthLogs].sort((a, b) => {
-      const timeA = a.date?.toMillis ? a.date.toMillis() : Date.parse(a.date) || 0;
-      const timeB = b.date?.toMillis ? b.date.toMillis() : Date.parse(b.date) || 0;
-      return timeB - timeA;
-    });
-
-    if (activeFilter === 'All') return sorted;
-    return sorted.filter((log) => {
-      const logStatus = log.status?.toLowerCase() || '';
-      if (activeFilter === 'Urgent') {
-        return logStatus === 'urgent' || logStatus === 'immediate care';
-      }
-      if (activeFilter === 'Moderate') {
-        return logStatus === 'moderate' || logStatus === 'needs evaluation';
-      }
-      if (activeFilter === 'Mild') {
-        return logStatus === 'mild';
-      }
-      if (activeFilter === 'Safe') {
-        return logStatus === 'safe' || logStatus === 'no concerns detected';
-      }
-      return false;
-    });
-  }, [healthLogs, activeFilter]);
-
-  // Bulletproof date parser to prevent any Invalid Date / NaN outputs
+  // Bulletproof date parser to prevent any Invalid Date / NaN outputs (including Hermes JS engine)
   const parseDate = (val) => {
     if (!val) return new Date(); // Fallback to now
 
@@ -98,7 +71,7 @@ export default function HistoryScreen({ navigation }) {
     }
 
     // If it is already a Date object
-    if (val instanceof Date) {
+    if (val instanceof Date && !isNaN(val.getTime())) {
       return val;
     }
 
@@ -108,8 +81,45 @@ export default function HistoryScreen({ navigation }) {
       return d;
     }
 
+    // Handle "MMM D, YYYY" strings in Hermes
+    if (typeof val === 'string') {
+      const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+      const m = val.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})/);
+      if (m && months[m[1]] !== undefined) {
+        return new Date(Number(m[3]), months[m[1]], Number(m[2]));
+      }
+    }
+
     return new Date(); // Fallback to now
   };
+
+  // Filter logs based on urgency status selection
+  const filteredLogs = useMemo(() => {
+    // Sort logs descending by timestamp first
+    const sorted = [...healthLogs].sort((a, b) => {
+      const timeA = parseDate(a._timestamp || a.date).getTime();
+      const timeB = parseDate(b._timestamp || b.date).getTime();
+      return timeB - timeA;
+    });
+
+    if (activeFilter === 'All') return sorted;
+    return sorted.filter((log) => {
+      const logStatus = log.status?.toLowerCase()?.trim() || '';
+      if (activeFilter === 'Urgent') {
+        return logStatus === 'urgent' || logStatus === 'immediate care';
+      }
+      if (activeFilter === 'Moderate') {
+        return logStatus === 'moderate' || logStatus === 'needs evaluation';
+      }
+      if (activeFilter === 'Mild') {
+        return logStatus === 'mild';
+      }
+      if (activeFilter === 'Safe') {
+        return logStatus === 'safe' || logStatus === 'no concerns detected';
+      }
+      return false;
+    });
+  }, [healthLogs, activeFilter]);
 
   // Format date grouping key: "Monday, 1 December"
   const formatGroupDate = (timestamp) => {
@@ -239,7 +249,12 @@ export default function HistoryScreen({ navigation }) {
             <Text style={styles.dateGroupTitle}>{item.date}</Text>
 
             {item.data.map((log, index) => {
-              const scanImage = log.imageUrl || log.imageUri;
+              const matchedPet = pets?.find(
+                (p) =>
+                  (log.petId && p.id === log.petId) ||
+                  (log.petName && p.name && p.name.toLowerCase() === log.petName.toLowerCase())
+              );
+              const scanImage = log.imageUrl || log.imageUri || getPetPhotoUri(matchedPet);
               return (
                 <View key={log.id} style={styles.timelineRow}>
                   {/* Left part: Time + Node line */}
@@ -274,7 +289,8 @@ export default function HistoryScreen({ navigation }) {
                         <View style={styles.cardHeaderMeta}>
                           <Text style={styles.cardTitle} numberOfLines={1}>{log.issue}</Text>
                           <View style={styles.cardSubRow}>
-                            <Text style={styles.cardSubText}>{log.petEmoji || '🐾'} {log.petName}</Text>
+                            <Ionicons name="paw" size={11} color={Colors.primary} style={{ marginRight: 4 }} />
+                            <Text style={styles.cardSubText}>{log.petName}</Text>
                           </View>
                         </View>
                       </View>
@@ -328,7 +344,7 @@ export default function HistoryScreen({ navigation }) {
                 <View style={styles.modalMetaCell}>
                   <Text style={styles.modalMetaLabel}>Target Pet</Text>
                   <Text style={styles.modalMetaValue}>
-                    {selectedScan.petEmoji || '🐾'} {selectedScan.petName} ({selectedScan.breed})
+                    {selectedScan.petName}{selectedScan.breed ? ` (${selectedScan.breed})` : ''}
                   </Text>
                 </View>
               </View>
