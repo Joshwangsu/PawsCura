@@ -19,3 +19,5 @@ veda
 .env
 .env.*
 .env.local
+*.apk
+*.aab

@@ -26,7 +26,7 @@ export default function WelcomeScreen({ navigation }) {
           {/* Brand Logo (Logo with name under.png) */}
           <View style={styles.heroContainer}>
             <Image
-              source={require('../../../assets/Logo with name under.png')}
+              source={require('../../../assets/splash-logo.png')}
               style={styles.heroImage}
               resizeMode="contain"
             />

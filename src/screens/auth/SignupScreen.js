@@ -213,7 +213,7 @@ export default function SignupScreen({ navigation }) {
           {/* Brand Header */}
           <View style={styles.brandContainer}>
             <Image
-              source={require('../../../assets/Logo with name horizontal.png')}
+              source={require('../../../assets/logo-horizontal.png')}
               style={styles.brandLogo}
               resizeMode="contain"
             />

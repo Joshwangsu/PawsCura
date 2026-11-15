@@ -6,13 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Modal,
   Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { signOut } from 'firebase/auth';
-import { auth } from '../services/firebaseConfig';
 import PetCard from '../components/PetCard';
 import HealthLogCard from '../components/HealthLogCard';
 import { useHealth } from '../context/HealthContext';

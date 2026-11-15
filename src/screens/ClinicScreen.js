@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import InteractiveClinicMap from '../components/InteractiveClinicMap';
 import ClinicCard from '../components/ClinicCard';
 import { getClinicsFromFirestore } from '../services/firestoreClinics';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
@@ -22,10 +22,6 @@ import { useAds } from '../services/ads';
 import AdBanner from '../components/AdBanner';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
-
-// Use PROVIDER_DEFAULT (undefined) so the map works correctly in Expo Go.
-// PROVIDER_GOOGLE requires a native (non-Expo-Go) build and silently fails otherwise.
-const MAP_PROVIDER = undefined;
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -85,45 +81,43 @@ export default function ClinicScreen() {
   const filtered = isPremium ? clinics : clinics.slice(0, 3);
 
   const fetchRoutePath = async (origin, destination) => {
-    const directLine = [
-      { latitude: Number(origin.latitude), longitude: Number(origin.longitude) },
-      { latitude: Number(destination.latitude), longitude: Number(destination.longitude) },
-    ];
-    // Show immediate path while road route loads
-    setRouteCoords(directLine);
+    const oLat = Number(origin.latitude);
+    const oLng = Number(origin.longitude);
+    const dLat = Number(destination.latitude);
+    const dLng = Number(destination.longitude);
 
-    try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates?.length > 0) {
-        const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => ({
-          latitude: lat,
-          longitude: lng,
-        }));
-        setRouteCoords(coords);
-        setTimeout(() => {
-          mapRef.current?.fitToCoordinates(coords, {
-            edgePadding: { top: 45, right: 45, bottom: 45, left: 45 },
-            animated: true,
-          });
-        }, 150);
-        return;
+    const endpoints = [
+      `https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson`,
+      `https://routing.openstreetmap.de/routed-car/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson`,
+    ];
+
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates?.length > 0) {
+          const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => ({
+            latitude: Number(lat),
+            longitude: Number(lng),
+          }));
+          setRouteCoords(coords);
+          return;
+        }
+      } catch (err) {
+        console.log('Route endpoint fallback:', err.message);
       }
-    } catch (err) {
-      console.log('OSRM route fallback to direct line:', err.message);
     }
 
-    setTimeout(() => {
-      mapRef.current?.fitToCoordinates(directLine, {
-        edgePadding: { top: 45, right: 45, bottom: 45, left: 45 },
-        animated: true,
-      });
-    }, 150);
+    // Only if all road routing servers are unreachable, fall back to direct line
+    setRouteCoords([
+      { latitude: oLat, longitude: oLng },
+      { latitude: dLat, longitude: dLng },
+    ]);
   };
 
   const handleNavigate = (clinic) => {
     if (!clinic?.coordinates) return;
+    setRouteCoords([]);
     setSelectedClinic(clinic);
     if (location?.coords) {
       fetchRoutePath(location.coords, clinic.coordinates);
@@ -161,52 +155,14 @@ export default function ClinicScreen() {
 
       {/* ── Map View ── */}
       <View style={styles.mapContainer}>
-        {location ? (
-          <MapView
-            ref={mapRef}
-            provider={MAP_PROVIDER}
-            style={styles.map}
-            initialRegion={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: 0.08,
-              longitudeDelta: 0.08,
-            }}
-            showsUserLocation={true}
-            showsMyLocationButton={false}
-          >
-            {filtered.map((clinic) => {
-              if (!clinic.coordinates) return null;
-              return (
-                <Marker
-                  key={clinic.id}
-                  coordinate={clinic.coordinates}
-                  title={clinic.name}
-                  description={clinic.isOpen ? 'Open Now' : 'Closed'}
-                  onPress={() => setDetailClinic(clinic)}
-                >
-                  <View style={[styles.markerPin, { backgroundColor: clinic.isOpen ? Colors.success : Colors.danger }]}>
-                    <Ionicons name="medical" size={14} color={Colors.textInverse} />
-                  </View>
-                </Marker>
-              );
-            })}
-
-            {selectedClinic && routeCoords.length >= 2 && (
-              <>
-                <Polyline
-                  coordinates={routeCoords}
-                  strokeWidth={7}
-                  strokeColor="rgba(255, 255, 255, 0.85)"
-                />
-                <Polyline
-                  coordinates={routeCoords}
-                  strokeWidth={4}
-                  strokeColor={Colors.primary}
-                />
-              </>
-            )}
-          </MapView>
+        {location?.coords ? (
+          <InteractiveClinicMap
+            userCoords={location.coords}
+            clinics={filtered}
+            routeCoords={selectedClinic ? routeCoords : []}
+            selectedClinic={selectedClinic}
+            onPressClinic={(clinic) => setDetailClinic(clinic)}
+          />
         ) : (
           <View style={styles.mapBg}>
             <ActivityIndicator size="large" color={Colors.primary} />

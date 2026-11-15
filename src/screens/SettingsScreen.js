@@ -310,8 +310,7 @@ const styles = StyleSheet.create({
   },
   profileAvatarContainer: {
     alignItems: 'center',
-    marginBottom: Spacing.md,
-    position: 'relative',
+    marginBottom: Spacing.xs,
   },
   avatarGradientBorder: {
     width: 86,
@@ -336,17 +335,16 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   badgeContainer: {
-    position: 'absolute',
-    bottom: -8,
+    marginTop: 10,
     alignSelf: 'center',
     ...Shadows.sm,
   },
   badgeText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
     color: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
   },
@@ -360,7 +358,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: Colors.textPrimary,
-    marginTop: 8,
+    marginTop: 4,
   },
   profileEmail: {
     fontSize: 13,

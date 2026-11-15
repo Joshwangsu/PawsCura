@@ -101,7 +101,7 @@ export default function LoginScreen({ navigation }) {
           {/* Top Brand Header */}
           <View style={styles.brandHeader}>
             <Image
-              source={require('../../../assets/Logo with name horizontal.png')}
+              source={require('../../../assets/logo-horizontal.png')}
               style={styles.brandLogo}
               resizeMode="contain"
             />

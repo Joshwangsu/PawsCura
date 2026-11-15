@@ -14,49 +14,53 @@ import { Colors } from '../theme/colors';
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen({ onFinish }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
-  const logoTranslateY = useRef(new Animated.Value(20)).current;
+  const containerOpacity = useRef(new Animated.Value(1)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const logoTranslateY = useRef(new Animated.Value(10)).current;
 
   useEffect(() => {
-    // Smooth parallel animation sequence
+    // Fast, crisp entrance animation
     Animated.parallel([
-      Animated.timing(fadeAnim, {
+      Animated.timing(contentOpacity, {
         toValue: 1,
-        duration: 900,
+        duration: 300,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 6,
-        tension: 40,
+        friction: 7,
+        tension: 65,
         useNativeDriver: true,
       }),
       Animated.timing(logoTranslateY, {
         toValue: 0,
-        duration: 800,
+        duration: 300,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Finish splash screen display after delay
+    // Quickly fade out the entire splash overlay once ready
     const timer = setTimeout(() => {
-      Animated.timing(fadeAnim, {
+      Animated.timing(containerOpacity, {
         toValue: 0,
-        duration: 400,
+        duration: 250,
         useNativeDriver: true,
       }).start(() => {
         if (onFinish) onFinish();
       });
-    }, 2200);
+    }, 650);
 
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <View style={styles.container}>
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.container, { opacity: containerOpacity }]}
+    >
       <LinearGradient
-        colors={['#302B29', '#794B35', '#302B29']}
+        colors={['#FFF8F1', '#F7E6D2', '#EDD3B6']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -65,7 +69,7 @@ export default function SplashScreen({ onFinish }) {
           style={[
             styles.brandBox,
             {
-              opacity: fadeAnim,
+              opacity: contentOpacity,
               transform: [
                 { scale: scaleAnim },
                 { translateY: logoTranslateY },
@@ -73,27 +77,24 @@ export default function SplashScreen({ onFinish }) {
             },
           ]}
         >
-          {/* Logo Circle */}
-          <View style={styles.logoGlowRing}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="paw" size={56} color="#38BDF8" />
-            </View>
-          </View>
+          <Image
+            source={require('../../assets/splash-logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
 
-          {/* Typography */}
-          <Text style={styles.appName}>PawsCura</Text>
           <View style={styles.taglineBadge}>
-            <Ionicons name="sparkles" size={12} color="#F59E0B" />
+            <Ionicons name="sparkles" size={12} color="#D97706" />
             <Text style={styles.taglineText}>AI-Powered Pet Diagnostics</Text>
           </View>
         </Animated.View>
 
         {/* Footer */}
-        <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+        <Animated.View style={[styles.footer, { opacity: contentOpacity }]}>
           <Text style={styles.footerText}>Smart Care For Your Furry Friends</Text>
         </Animated.View>
       </LinearGradient>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -101,6 +102,7 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 99999,
+    elevation: 999,
   },
   gradient: {
     flex: 1,
@@ -110,55 +112,27 @@ const styles = StyleSheet.create({
   brandBox: {
     alignItems: 'center',
   },
-  logoGlowRing: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
-  },
-  logoCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#794B35',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#38BDF8',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  appName: {
-    fontSize: 44,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-    textShadowColor: 'rgba(56, 189, 248, 0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 10,
+  logoImage: {
+    width: 220,
+    height: 220,
+    marginBottom: 8,
   },
   taglineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(121, 75, 53, 0.1)',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
-    marginTop: 12,
+    marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(121, 75, 53, 0.2)',
   },
   taglineText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#E2E8F0',
+    color: '#794B35',
     letterSpacing: 0.5,
   },
   footer: {
@@ -169,7 +143,7 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#8C624C',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
