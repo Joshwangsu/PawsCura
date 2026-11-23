@@ -511,7 +511,7 @@ export default function ScanScreen() {
         <View style={styles.viewfinderWrapper}>
           {imageUri ? (
             <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+              <Image source={{ uri: (result && result.annotatedImage) ? result.annotatedImage : imageUri }} style={styles.imagePreview} />
             </View>
           ) : (
             <TouchableOpacity 
@@ -544,78 +544,63 @@ export default function ScanScreen() {
               <Text style={styles.resultTitle}>AI Assessment Complete</Text>
             </View>
 
-            {/* Auto-Save Status Banner — driven by real Firestore save state */}
-            {autoSaveStatus === 'saving' && (
-              <View style={styles.autoSavingBanner}>
-                <ActivityIndicator size="small" color={Colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.matchedLabel}>Saving to Medical History…</Text>
-                  <Text style={styles.matchedPetName} numberOfLines={1}>
-                    Recording for {autoSavedPetName || 'your pet'}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {autoSaveStatus === 'saved' && (
-              <View style={styles.autoMatchedBanner}>
-                <View style={styles.matchedLeft}>
-                  <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.matchedLabel}>✓ Auto-Recorded to Medical History</Text>
-                    <Text style={styles.matchedPetName} numberOfLines={1}>
-                      Saved under {autoSavedPetName || 'your pet'} • Tap to view
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('Pets')}
-                  style={styles.changePetBtn}
-                  activeOpacity={0.75}
-                >
-                  <Text style={styles.changePetText}>View</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {autoSaveStatus === 'error' && (
-              <TouchableOpacity
-                onPress={() => setShowPetModal(true)}
-                style={styles.unmatchedBanner}
-              >
-                <Ionicons name="alert-circle-outline" size={16} color={Colors.warning} />
-                <Text style={styles.unmatchedText}>Auto-save failed — tap to assign pet manually</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-
-            {autoSaveStatus === 'no_pets' && (
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Pets')}
-                style={styles.unmatchedBanner}
-              >
-                <Ionicons name="paw-outline" size={16} color={Colors.warning} />
-                <Text style={styles.unmatchedText}>No pets registered — tap to add a pet first</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-
-
-            <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(result.urgencyLevel) }]}>
-              <Text style={styles.urgencyText}>{result.urgencyLevel}</Text>
-            </View>
-
+            {/* 4. Suspected Anomaly (Top of the Card) */}
             <View style={styles.resultSection}>
-              <Text style={styles.resultLabel}>Suspected Condition</Text>
+              <Text style={styles.resultLabel}>Suspected Anomaly</Text>
               <Text style={styles.resultValuePrimary}>
                 {result.suspectedCondition}
                 {result.confidence !== undefined && ` (${result.confidence}%)`}
               </Text>
             </View>
 
+            {/* 3. Urgency & Clinical Severity Badge (Right below 4) */}
+            <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(result.urgencyLevel) }]}>
+              <Text style={styles.urgencyText}>
+                {result.urgencyLevel}
+                {result.severityLevel && result.severityScore ? ` • Severity: ${result.severityLevel} (${result.severityScore}%)` : ''}
+              </Text>
+            </View>
+
+            {/* 9. Urgent Case Warning Banner (Right below 3) */}
+            {result.urgencyLevel && result.urgencyLevel.toLowerCase().includes('urgent') && (
+              <TouchableOpacity
+                style={styles.urgentWarningBanner}
+                activeOpacity={0.85}
+                onPress={() => Alert.alert(
+                  'Urgent Veterinary Attention Required',
+                  'Your pet may need immediate professional care. We strongly recommend visiting a nearby vet clinic as soon as possible.',
+                  [
+                    { text: 'Find Nearby Clinics', onPress: () => navigation.navigate('Clinics') },
+                    { text: 'Dismiss', style: 'cancel' },
+                  ]
+                )}
+              >
+                <Ionicons name="warning" size={18} color="#92400E" />
+                <Text style={styles.urgentWarningText}>
+                  Urgent case detected. Tap to see options.
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#92400E" />
+              </TouchableOpacity>
+            )}
+
+            {/* 5. Symptoms (Title "Symptoms" with same normal font size) */}
+            {Array.isArray(result.detectedSymptoms) && result.detectedSymptoms.length > 0 && (
+              <View style={styles.resultSection}>
+                <Text style={styles.resultLabel}>Symptoms</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {result.detectedSymptoms.map((sym, idx) => (
+                    <View key={idx} style={styles.conditionTag}>
+                      <Text style={styles.conditionTagText}>{typeof sym === 'string' ? sym : sym.class_name}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* 6. Other Possible Anomalies */}
             {result.alternatives && result.alternatives.length > 0 && (
               <View style={styles.resultSection}>
-                <Text style={styles.resultLabel}>Other Possibilities</Text>
+                <Text style={styles.resultLabel}>Other Possible Anomalies</Text>
                 {result.alternatives.map((alt, idx) => (
                   <Text key={idx} style={styles.alternativeText}>
                     • {alt.condition} ({alt.confidence}%)
@@ -624,43 +609,18 @@ export default function ScanScreen() {
               </View>
             )}
 
+            {/* 7. Description (AI Description generated via Gemini) */}
             <View style={styles.resultSection}>
-              <Text style={styles.resultLabel}>Observations</Text>
+              <Text style={styles.resultLabel}>Description</Text>
               <Text style={styles.resultValue}>{result.analysis}</Text>
-            </View>
-
-            <View style={styles.resultSection}>
-              <Text style={styles.resultLabel}>Recommended Action</Text>
-              <Text style={styles.resultValue}>{result.recommendedAction}</Text>
             </View>
 
             <Text style={styles.disclaimerText}>
               Disclaimer: This is an AI assessment and not a substitute for professional veterinary care.
             </Text>
 
+            {/* 10. Action Buttons */}
             <View style={{ gap: 10, marginTop: Spacing.md }}>
-              {/* Urgent Case Warning */}
-              {result.urgencyLevel && result.urgencyLevel.toLowerCase().includes('urgent') && (
-                <TouchableOpacity
-                  style={styles.urgentWarningBanner}
-                  activeOpacity={0.85}
-                  onPress={() => Alert.alert(
-                    'Urgent Veterinary Attention Required',
-                    'Your pet may need immediate professional care. We strongly recommend visiting a nearby vet clinic as soon as possible.',
-                    [
-                      { text: 'Find Nearby Clinics', onPress: () => navigation.navigate('Clinics') },
-                      { text: 'Dismiss', style: 'cancel' },
-                    ]
-                  )}
-                >
-                  <Ionicons name="warning" size={18} color="#92400E" />
-                  <Text style={styles.urgentWarningText}>
-                    Urgent case detected. Tap to see options.
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color="#92400E" />
-                </TouchableOpacity>
-              )}
-
               {/* Primary Action: Ask Virtual Vet */}
               <TouchableOpacity
                 style={styles.chatbotLinkBtn}
@@ -689,6 +649,62 @@ export default function ScanScreen() {
                 <Text style={styles.resultClinicsBtnText}>Find Nearby Vet Clinics</Text>
               </TouchableOpacity>
             </View>
+
+            {/* 2. Auto-Record Status (Grayed out at the bottom of the card with green checkmark) */}
+            {autoSaveStatus === 'saving' && (
+              <View style={[styles.autoSavingBanner, { marginTop: 14, backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1, marginBottom: 0 }]}>
+                <ActivityIndicator size="small" color="#64748B" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.matchedLabel, { color: '#64748B' }]}>Saving to Medical History…</Text>
+                  <Text style={[styles.matchedPetName, { color: '#475569' }]} numberOfLines={1}>
+                    Recording for {autoSavedPetName || 'your pet'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {autoSaveStatus === 'saved' && (
+              <View style={[styles.autoMatchedBanner, { marginTop: 14, backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1, marginBottom: 0 }]}>
+                <View style={styles.matchedLeft}>
+                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={[styles.matchedLabel, { color: '#475569', fontWeight: '700' }]}>Auto-Recorded to Medical History</Text>
+                    <Text style={[styles.matchedPetName, { color: '#64748B' }]} numberOfLines={1}>
+                      Saved under {autoSavedPetName || 'your pet'}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Pets')}
+                  style={[styles.changePetBtn, { backgroundColor: '#E2E8F0', borderColor: '#CBD5E1' }]}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.changePetText, { color: '#334155' }]}>View</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {autoSaveStatus === 'error' && (
+              <TouchableOpacity
+                onPress={() => setShowPetModal(true)}
+                style={[styles.unmatchedBanner, { marginTop: 14, marginBottom: 0 }]}
+              >
+                <Ionicons name="alert-circle-outline" size={16} color={Colors.warning} />
+                <Text style={styles.unmatchedText}>Auto-save failed — tap to assign pet manually</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+
+            {autoSaveStatus === 'no_pets' && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Pets')}
+                style={[styles.unmatchedBanner, { marginTop: 14, marginBottom: 0 }]}
+              >
+                <Ionicons name="paw-outline" size={16} color={Colors.warning} />
+                <Text style={styles.unmatchedText}>No pets registered — tap to add a pet first</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -742,11 +758,13 @@ export default function ScanScreen() {
 
         {/* Supported conditions */}
         <View style={styles.conditionsCard}>
-          <Text style={styles.conditionsTitle}>Detectable Conditions</Text>
+          <Text style={styles.conditionsTitle}>18 Detectable Symptoms &amp; 26 Diseases</Text>
           <View style={styles.conditionsTags}>
             {[
-              'Skin Rash', 'Hotspots', 'Mange', 'Ringworm',
-              'Wounds', 'Lumps', 'Ear Issues', 'Eye Discharge',
+              'Sarcoptic & Demodectic Mange', 'Hot Spots', 'Atopic & Flea Allergy',
+              'Ringworm & Yeast Dermatitis', 'Pyoderma & Ulcers', 'Cataracts & Corneal Ulcers',
+              'Conjunctivitis & Dry Eye (KCS)', 'Eyelid Masses & Blepharitis', 'Gingivostomatitis & Oral Ulcers',
+              'Alopecia & Lichenification', 'Erythema & Crust/Scale', 'Excoriation & Swelling',
             ].map((tag) => (
               <View key={tag} style={styles.conditionTag}>
                 <Text style={styles.conditionTagText}>{tag}</Text>

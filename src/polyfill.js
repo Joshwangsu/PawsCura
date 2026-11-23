@@ -32,8 +32,59 @@ try {
     value: polyfill,
   });
 } catch (e) {
-  ReactNative.InteractionManager = polyfill;
+  try {
+    ReactNative.InteractionManager = polyfill;
+  } catch (_) {
+    // Already defined or getter-only on web
+  }
 }
+
+if (!ReactNative.codegenNativeComponent) {
+  try {
+    Object.defineProperty(ReactNative, 'codegenNativeComponent', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: (name) => {
+        const MockComp = (props) => null;
+        MockComp.displayName = name || 'MockNativeComponent';
+        return MockComp;
+      },
+    });
+  } catch (e) {
+    try {
+      ReactNative.codegenNativeComponent = (name) => (props) => null;
+    } catch (_) {}
+  }
+}
+
+if (!ReactNative.codegenNativeCommands) {
+  try {
+    Object.defineProperty(ReactNative, 'codegenNativeCommands', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: () => ({}),
+    });
+  } catch (e) {
+    try {
+      ReactNative.codegenNativeCommands = () => ({});
+    } catch (_) {}
+  }
+}
+
+try {
+  const uiMgr = ReactNative.UIManager || {};
+  if (!uiMgr.hasViewManagerConfig) {
+    uiMgr.hasViewManagerConfig = () => false;
+  }
+  if (!uiMgr.getViewManagerConfig) {
+    uiMgr.getViewManagerConfig = () => null;
+  }
+  if (!ReactNative.UIManager) {
+    ReactNative.UIManager = uiMgr;
+  }
+} catch (_) {}
 
 // ── Global Public Sans Font Injection for <Text> & <TextInput> ──────────────
 export function resolveAppFont(weight) {
