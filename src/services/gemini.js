@@ -12,7 +12,14 @@ import {
 // The legacy @google/generative-ai package only accepts AIza. keys.
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
-const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
+let ai = null;
+try {
+  if (GEMINI_API_KEY) {
+    ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  }
+} catch (err) {
+  console.warn('Failed to initialize GoogleGenAI client:', err);
+}
 
 // Model names - gemini-2.5-flash is current, gemini-1.5-flash is fallback
 const PRIMARY_MODEL = 'gemini-2.5-flash';

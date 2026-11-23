@@ -34,10 +34,17 @@ export default function ChatbotScreen({ route, navigation }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const flatListRef = useRef(null);
   // The session (if any) that the scan context belongs to. Manually created chats must NOT use it.
   const contextSessionIdRef = useRef(null);
+  const activeSessionIdRef = useRef(null);
+  const creatingSessionRef = useRef(false);
+  const greetingInitSetRef = useRef(new Set());
+
+  const selectActiveSession = (id) => {
+    activeSessionIdRef.current = id;
+    setActiveSessionId(id);
+  };
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length;
 
@@ -45,9 +52,9 @@ export default function ChatbotScreen({ route, navigation }) {
     if (!user || sessions.length <= 1) return;
     try {
       await deleteDoc(doc(db, 'chats', user.uid, 'userSessions', sessId));
-      if (activeSessionId === sessId) {
+      if (activeSessionIdRef.current === sessId) {
         const remaining = sessions.filter(s => s.id !== sessId);
-        if (remaining.length > 0) setActiveSessionId(remaining[0].id);
+        if (remaining.length > 0) selectActiveSession(remaining[0].id);
       }
     } catch (err) {
       console.error('Error deleting session:', err);
@@ -77,10 +84,12 @@ export default function ChatbotScreen({ route, navigation }) {
       });
 
       if (loadedSessions.length === 0) {
-        createNewSession(initialTitle, scanRecordId);
+        if (!creatingSessionRef.current) {
+          createNewSession(initialTitle, scanRecordId);
+        }
       } else {
         setSessions(loadedSessions);
-        if (!activeSessionId) {
+        if (!activeSessionIdRef.current) {
           if (scanRecordId) {
             // --- SCAN-LINKED SESSION MATCHING ---
             // A scanRecordId is present: look for a session that was already linked to this exact scan.
@@ -88,8 +97,8 @@ export default function ChatbotScreen({ route, navigation }) {
             if (linkedSess) {
               // Resume the existing session for this scan
               contextSessionIdRef.current = linkedSess.id;
-              setActiveSessionId(linkedSess.id);
-            } else {
+              selectActiveSession(linkedSess.id);
+            } else if (!creatingSessionRef.current) {
               // First time opening chatbot for this scan — create a new dedicated session
               createNewSession(initialTitle, scanRecordId);
             }
@@ -98,11 +107,11 @@ export default function ChatbotScreen({ route, navigation }) {
 
           if (initialContext && initialContext.suspectedCondition) {
             // No scanRecordId, but we have context — fallback: open most recent session
-            setActiveSessionId(loadedSessions[0].id);
+            selectActiveSession(loadedSessions[0].id);
             return;
           }
 
-          setActiveSessionId(loadedSessions[0].id);
+          selectActiveSession(loadedSessions[0].id);
         }
       }
     });
@@ -122,6 +131,8 @@ export default function ChatbotScreen({ route, navigation }) {
       });
 
       if (loaded.length === 0) {
+        if (greetingInitSetRef.current.has(activeSessionId)) return;
+        greetingInitSetRef.current.add(activeSessionId);
         // Only the scan-linked session gets the scan-context greeting; new chats start fresh
         const ctx = activeSessionId === contextSessionIdRef.current ? initialContext : null;
         const pet = (ctx && (ctx.matchedPetName || ctx.petName)) || 'your pet';
@@ -153,7 +164,8 @@ export default function ChatbotScreen({ route, navigation }) {
   }, [messages, isTyping]);
 
   const createNewSession = async (customTitle, linkedScanRecordId) => {
-    if (!user) return;
+    if (!user || creatingSessionRef.current) return;
+    creatingSessionRef.current = true;
     const sessId = `sess_${Date.now()}`;
     const newTitle = customTitle || `Pet - Consultation #${sessions.length + 1}`;
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -170,10 +182,9 @@ export default function ChatbotScreen({ route, navigation }) {
     try {
       // Sessions created for a scan (title/link supplied by the auto-open flow) own the scan context
       if (customTitle || linkedScanRecordId) contextSessionIdRef.current = sessId;
-      await setDoc(doc(db, 'chats', user.uid, 'userSessions', sessId), newSess);
-      setActiveSessionId(sessId);
+      selectActiveSession(sessId);
       setActiveTab('chat');
-      setShowHistoryModal(false);
+      await setDoc(doc(db, 'chats', user.uid, 'userSessions', sessId), newSess);
 
       // Write the chatSessionId back onto the health record so history/pet pages know
       // which chat to open when "Ask Vet" is tapped from that specific scan record.
@@ -189,11 +200,13 @@ export default function ChatbotScreen({ route, navigation }) {
       }
     } catch (err) {
       console.error('Error creating chat session:', err);
+    } finally {
+      creatingSessionRef.current = false;
     }
   };
 
   const handleSend = async () => {
-    if (!inputText.trim() || !user || !activeSessionId) return;
+    if (!inputText.trim() || !user || !activeSessionId || isTyping) return;
 
     const userText = inputText.trim();
     setInputText('');
@@ -217,6 +230,10 @@ export default function ChatbotScreen({ route, navigation }) {
           title: autoTitle,
           updatedAt: serverTimestamp(),
         }, { merge: true });
+      } else {
+        await setDoc(doc(db, 'chats', user.uid, 'userSessions', activeSessionId), {
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
       }
 
       const history = messages.map((m) => ({ role: m.role, text: m.text }));
@@ -230,6 +247,16 @@ export default function ChatbotScreen({ route, navigation }) {
       });
     } catch (error) {
       console.error('Failed to send message:', error);
+      try {
+        const messagesRef = collection(db, 'chats', user.uid, 'userSessions', activeSessionId, 'messages');
+        await addDoc(messagesRef, {
+          role: 'assistant',
+          text: 'I apologize, but I encountered a temporary connection issue while processing your question. Please try sending your message again.',
+          timestamp: serverTimestamp(),
+        });
+      } catch (innerErr) {
+        console.error('Fallback error message failed:', innerErr);
+      }
     } finally {
       setIsTyping(false);
     }
@@ -425,7 +452,7 @@ export default function ChatbotScreen({ route, navigation }) {
                 <TouchableOpacity
                   style={[styles.historyCard, isActive && styles.historyCardActive]}
                   onPress={() => {
-                    setActiveSessionId(item.id);
+                    selectActiveSession(item.id);
                     setActiveTab('chat');
                   }}
                   activeOpacity={0.85}
@@ -472,78 +499,6 @@ export default function ChatbotScreen({ route, navigation }) {
           />
         </View>
       )}
-
-      {/* ChatGPT-Style Side Drawer Chat History Overlay */}
-      <Modal visible={showHistoryModal} animationType="fade" transparent>
-        <TouchableOpacity
-          style={styles.drawerOverlay}
-          activeOpacity={1}
-          onPress={() => setShowHistoryModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.drawerSidebar}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Drawer Header */}
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle} numberOfLines={1}>
-                {currentSession ? currentSession.title : 'Chat History'}
-              </Text>
-              <View style={styles.drawerHeaderIcons}>
-                <Ionicons name="pin" size={16} color="#A1A1AA" style={{ marginRight: 8 }} />
-                <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
-                  <Ionicons name="ellipsis-horizontal" size={20} color="#A1A1AA" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* New Chat Button */}
-            <TouchableOpacity
-              style={styles.drawerNewChatBtn}
-              onPress={() => createNewSession()}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add" size={18} color="#ECECF1" />
-              <Text style={styles.drawerNewChatText}>New chat</Text>
-            </TouchableOpacity>
-
-            {/* Chat Threads List */}
-            <FlatList
-              data={sessions}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.drawerListContent}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => {
-                const isActive = item.id === activeSessionId;
-                return (
-                  <TouchableOpacity
-                    style={[styles.drawerItem, isActive && styles.drawerItemActive]}
-                    onPress={() => {
-                      setActiveSessionId(item.id);
-                      setShowHistoryModal(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={isActive ? "chatbubble" : "chatbubble-outline"}
-                      size={16}
-                      color={isActive ? "#FFFFFF" : "#A1A1AA"}
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text
-                      style={[styles.drawerItemTitle, isActive && styles.drawerItemTitleActive]}
-                      numberOfLines={1}
-                    >
-                      {item.title}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   );
 }

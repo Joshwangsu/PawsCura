@@ -1,10 +1,11 @@
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { calculateDistance } from './googleMaps';
+import { calculateDistance, getNearbyVeterinarians } from './googleMaps';
 
 /**
  * Fetches all active veterinary clinics from Firestore (managed by the admin web)
  * and enriches each record with the distance from the user's current location.
+ * Falls back to Google Maps / local directory if Firestore is empty or unreachable.
  *
  * @param {number} userLat  - User's current latitude
  * @param {number} userLon  - User's current longitude
@@ -16,8 +17,8 @@ export async function getClinicsFromFirestore(userLat, userLon) {
     const snapshot = await getDocs(clinicsRef);
 
     if (snapshot.empty) {
-      console.log('No clinics found in Firestore.');
-      return [];
+      console.log('No clinics found in Firestore, using nearby directory fallback.');
+      return await getNearbyVeterinarians(userLat, userLon);
     }
 
     const clinics = snapshot.docs.map((doc) => {
@@ -75,6 +76,6 @@ export async function getClinicsFromFirestore(userLat, userLon) {
     return clinics.sort((a, b) => a.distanceKm - b.distanceKm);
   } catch (error) {
     console.error('Error fetching clinics from Firestore:', error);
-    return [];
+    return await getNearbyVeterinarians(userLat, userLon);
   }
 }

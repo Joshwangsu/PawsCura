@@ -84,7 +84,7 @@ export default function PaywallScreen({ navigation }) {
   const handleSelectPlan = async (plan) => {
     if (plan === 'premium') {
       if (isPremium) {
-        alert('You are already subscribed to the Premium Plan!');
+        Alert.alert('Active Plan', 'You are already subscribed to the Premium Plan!');
         return;
       }
       setSelectedPlan('premium');
@@ -92,7 +92,7 @@ export default function PaywallScreen({ navigation }) {
     } else {
       // Free plan selected
       if (!isPremium) {
-        alert('You are already on the Free Plan.');
+        Alert.alert('Active Plan', 'You are already on the Free Plan.');
         return;
       }
       // Trigger Downgrade
@@ -139,7 +139,7 @@ export default function PaywallScreen({ navigation }) {
         setShowSuccess(true);
       } catch (err) {
         console.error('Downgrade error:', err);
-        alert('Failed to change subscription plan. Please try again.');
+        Alert.alert('Error', 'Failed to change subscription plan. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -150,8 +150,22 @@ export default function PaywallScreen({ navigation }) {
     const errs = {};
     if (!cardName.trim()) errs.cardName = 'Name is required';
     if (cardNumber.replace(/-/g, '').length < 16) errs.cardNumber = 'Enter a valid 16-digit card number';
-    if (expiry.length < 5) errs.expiry = 'Enter expiry date (MM/YY)';
-    if (cvv.length < 3) errs.cvv = 'Enter 3-digit CVV';
+    if (expiry.length < 5) {
+      errs.expiry = 'Enter expiry date (MM/YY)';
+    } else {
+      const [mmStr, yyStr] = expiry.split('/');
+      const mm = parseInt(mmStr, 10);
+      const yy = parseInt(yyStr, 10);
+      const now = new Date();
+      const curYear = now.getFullYear() % 100;
+      const curMonth = now.getMonth() + 1;
+      if (isNaN(mm) || mm < 1 || mm > 12) {
+        errs.expiry = 'Invalid month (01-12)';
+      } else if (isNaN(yy) || yy < curYear || (yy === curYear && mm < curMonth)) {
+        errs.expiry = 'Card has expired';
+      }
+    }
+    if (cvv.replace(/[^0-9]/g, '').length < 3) errs.cvv = 'Enter 3-digit CVV';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -207,7 +221,7 @@ export default function PaywallScreen({ navigation }) {
       setErrors({});
     } catch (err) {
       console.error('Checkout error:', err);
-      alert('Transaction failed. Please check card info and retry.');
+      Alert.alert('Payment Error', 'Transaction failed. Please check card info and retry.');
     } finally {
       setLoading(false);
     }

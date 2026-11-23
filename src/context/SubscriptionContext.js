@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { Alert } from 'react-native';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../services/firebaseConfig';
@@ -32,7 +33,7 @@ export const SubscriptionProvider = ({ children }) => {
         // Log out immediately if suspended
         if (data.isSuspended) {
           signOut(auth).catch(err => console.log(err));
-          alert("Your account has been suspended by an administrator.");
+          Alert.alert('Account Suspended', 'Your account has been suspended by an administrator.');
           return;
         }
 
@@ -48,8 +49,8 @@ export const SubscriptionProvider = ({ children }) => {
         // Sync username/email to firestore for new NoSQL schema fields if missing
         if (!data.username || !data.email) {
           updateDoc(userDocRef, {
-            username: data.username || user.displayName || user.email.split('@')[0],
-            email: data.email || user.email
+            username: data.username || user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
+            email: data.email || user.email || ''
           }).catch(err => console.log(`Error updating user details: ${err}`));
         }
 
@@ -72,8 +73,8 @@ export const SubscriptionProvider = ({ children }) => {
         // Initialize user document for first time
         const todayStr = new Date().toISOString().split('T')[0];
         setDoc(userDocRef, {
-          username: user.displayName || user.email.split('@')[0],
-          email: user.email,
+          username: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
+          email: user.email || '',
           isPremium: isTestEmail ? true : false,
           scanUsageCount: 0,
           scanUsageDate: todayStr

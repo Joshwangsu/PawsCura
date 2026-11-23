@@ -22,6 +22,7 @@ export const openAd = (ad) => {
 export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
   const [, forceUpdate] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH);
   const flatListRef = useRef(null);
   const isDraggingRef = useRef(false);
 
@@ -95,7 +96,15 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
 
   // Multi-ad swiping carousel
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - containerWidth) > 1) {
+          setContainerWidth(w);
+        }
+      }}
+    >
       <FlatList
         ref={flatListRef}
         data={visibleAds}
@@ -103,7 +112,7 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        snapToInterval={SCREEN_WIDTH}
+        snapToInterval={containerWidth}
         decelerationRate="fast"
         bounces={false}
         onScrollBeginDrag={() => {
@@ -111,7 +120,7 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
         }}
         onMomentumScrollEnd={(e) => {
           const offset = e.nativeEvent.contentOffset.x;
-          const index = Math.round(offset / SCREEN_WIDTH);
+          const index = Math.round(offset / containerWidth);
           if (index >= 0 && index < visibleAds.length) {
             setActiveIndex(index);
           }
@@ -126,7 +135,7 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
           }, 100);
         }}
         renderItem={({ item }) => (
-          <View style={{ width: SCREEN_WIDTH }}>
+          <View style={{ width: containerWidth }}>
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => openAd(item)}

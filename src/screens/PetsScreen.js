@@ -95,6 +95,11 @@ function AddPetModal({ onClose, onAdd }) {
         {
           text: 'Camera',
           onPress: async () => {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            if (perm.status !== 'granted') {
+              Alert.alert('Permission Required', 'Please enable camera access in your device settings to capture pet photos.');
+              return;
+            }
             const res = await ImagePicker.launchCameraAsync({
               allowsEditing: true,
               aspect: [4, 3],
@@ -114,6 +119,11 @@ function AddPetModal({ onClose, onAdd }) {
         {
           text: 'Gallery',
           onPress: async () => {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (perm.status !== 'granted') {
+              Alert.alert('Permission Required', 'Please enable photo library access in your device settings to select pet photos.');
+              return;
+            }
             const res = await ImagePicker.launchImageLibraryAsync({
               allowsEditing: true,
               aspect: [4, 3],
@@ -140,6 +150,14 @@ function AddPetModal({ onClose, onAdd }) {
       Alert.alert('Missing Required Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
+    if (form.age && (isNaN(parseFloat(form.age)) || parseFloat(form.age) < 0 || parseFloat(form.age) > 50)) {
+      Alert.alert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
+      return;
+    }
+    if (form.weight && (isNaN(parseFloat(form.weight)) || parseFloat(form.weight) <= 0 || parseFloat(form.weight) > 250)) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight between 0.1 and 250 kg.');
+      return;
+    }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
     const frontPhoto = photos.find((p) => p.angle === 'front') || photos[0];
 
@@ -147,12 +165,12 @@ function AddPetModal({ onClose, onAdd }) {
       id: `p_${Date.now()}`,
       name: form.name.trim(),
       species: form.species,
-      breed: form.breed || `${selectedSpecies.label}`,
-      age: form.age || 'Unknown',
-      weight: form.weight || 'Unknown',
+      breed: form.breed.trim() || `${selectedSpecies.label}`,
+      age: form.age.trim() || 'Unknown',
+      weight: form.weight.trim() || 'Unknown',
       gender: form.gender || 'Unknown',
-      birthday: form.birthday || '',
-      notes: form.notes || '',
+      birthday: form.birthday.trim() || '',
+      notes: form.notes.trim() || '',
       icon: selectedSpecies.icon,
       color: colorPair.bg,
       accentColor: colorPair.accent,
@@ -519,6 +537,11 @@ function EditPetModal({ pet, onClose, onEdit }) {
         {
           text: 'Camera',
           onPress: async () => {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            if (perm.status !== 'granted') {
+              Alert.alert('Permission Required', 'Please enable camera access in your device settings to capture pet photos.');
+              return;
+            }
             const res = await ImagePicker.launchCameraAsync({
               allowsEditing: true,
               aspect: [4, 3],
@@ -538,6 +561,11 @@ function EditPetModal({ pet, onClose, onEdit }) {
         {
           text: 'Gallery',
           onPress: async () => {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (perm.status !== 'granted') {
+              Alert.alert('Permission Required', 'Please enable photo library access in your device settings to select pet photos.');
+              return;
+            }
             const res = await ImagePicker.launchImageLibraryAsync({
               allowsEditing: true,
               aspect: [4, 3],
@@ -564,18 +592,26 @@ function EditPetModal({ pet, onClose, onEdit }) {
       Alert.alert('Missing Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
+    if (form.age && (isNaN(parseFloat(form.age)) || parseFloat(form.age) < 0 || parseFloat(form.age) > 50)) {
+      Alert.alert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
+      return;
+    }
+    if (form.weight && (isNaN(parseFloat(form.weight)) || parseFloat(form.weight) <= 0 || parseFloat(form.weight) > 250)) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight between 0.1 and 250 kg.');
+      return;
+    }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
     const frontPhoto = photos.find((p) => p.angle === 'front') || photos[0];
 
     onEdit(pet.id, {
       name: form.name.trim(),
       species: form.species,
-      breed: form.breed || `${selectedSpecies.label}`,
-      age: form.age || '0',
-      weight: form.weight || '0',
+      breed: form.breed.trim() || `${selectedSpecies.label}`,
+      age: form.age.trim() || '',
+      weight: form.weight.trim() || '',
       gender: form.gender || 'Unknown',
-      birthday: form.birthday || '',
-      notes: form.notes || '',
+      birthday: form.birthday.trim() || '',
+      notes: form.notes.trim() || '',
       icon: selectedSpecies.icon,
       color: colorPair.bg,
       accentColor: colorPair.accent,
@@ -667,7 +703,7 @@ function EditPetModal({ pet, onClose, onEdit }) {
                 ))}
               </View>
 
-              <View style={styles.formRow}>
+              <View style={styles.rowInputs}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldLabel}>Age (yrs)</Text>
                   <TextInput
@@ -689,9 +725,43 @@ function EditPetModal({ pet, onClose, onEdit }) {
                 </View>
               </View>
 
+              <Text style={styles.fieldLabel}>Gender</Text>
+              <View style={styles.genderRow}>
+                {['Male', 'Female'].map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    style={[styles.genderBtn, form.gender === g && styles.genderBtnActive]}
+                    onPress={() => updateField('gender', g)}
+                  >
+                    <Ionicons
+                      name={g === 'Male' ? 'male' : 'female'}
+                      size={16}
+                      color={form.gender === g ? '#fff' : Colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.genderLabel,
+                        form.gender === g && styles.genderLabelActive,
+                      ]}
+                    >
+                      {g}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Birthday</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Jan 15, 2022"
+                placeholderTextColor={Colors.textSecondary}
+                value={form.birthday}
+                onChangeText={(v) => updateField('birthday', v)}
+              />
+
               <Text style={styles.fieldLabel}>Notes</Text>
               <TextInput
-                style={[styles.textInput, styles.notesInput]}
+                style={[styles.textInput, styles.textArea]}
                 multiline
                 numberOfLines={3}
                 value={form.notes}
@@ -774,7 +844,7 @@ function EditPetModal({ pet, onClose, onEdit }) {
   );
 }
 
-export default function PetsScreen() {
+export default function PetsScreen({ route }) {
   const { pets, addPet, deletePet, updatePet, healthLogs } = useHealth();
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
@@ -785,6 +855,14 @@ export default function PetsScreen() {
   const [petToEdit, setPetToEdit] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const requestedPetId = route?.params?.petId;
+    if (requestedPetId && pets.length > 0) {
+      const found = pets.find((p) => p.id === requestedPetId);
+      if (found) setSelectedPet(found);
+    }
+  }, [route?.params?.petId, pets]);
 
   useEffect(() => {
     const hideNavbar = showAddModal || showEditModal;
@@ -987,9 +1065,9 @@ export default function PetsScreen() {
                 <View style={styles.detailGrid}>
                   {[
                     { label: 'Species', value: activePet?.species, icon: 'paw' },
-                    { label: 'Age', value: activePet?.age !== undefined ? `${activePet.age} yrs` : 'Not specified', icon: 'calendar' },
-                    { label: 'Weight', value: activePet?.weight !== undefined ? `${activePet.weight} kg` : 'Not specified', icon: 'barbell' },
-                    { label: 'Gender', value: activePet?.gender || 'Not specified', icon: 'male-female' },
+                    { label: 'Age', value: activePet?.age !== undefined && activePet?.age !== '' && activePet?.age !== 'Unknown' ? `${activePet.age} yrs` : 'Not specified', icon: 'calendar' },
+                    { label: 'Weight', value: activePet?.weight !== undefined && activePet?.weight !== '' && activePet?.weight !== 'Unknown' ? `${activePet.weight} kg` : 'Not specified', icon: 'barbell' },
+                    { label: 'Gender', value: activePet?.gender && activePet?.gender !== 'Unknown' ? activePet.gender : 'Not specified', icon: 'male-female' },
                   ].map((info) => (
                     <View key={info.label} style={styles.detailInfoCard}>
                       <Ionicons name={info.icon} size={16} color={activePet?.accentColor || Colors.primary} />
@@ -1053,7 +1131,7 @@ export default function PetsScreen() {
                     {hasMore && (
                       <TouchableOpacity
                         style={styles.viewAllRecordsBtn}
-                        onPress={() => navigation.navigate('History')}
+                        onPress={() => navigation.navigate('Records')}
                         activeOpacity={0.8}
                       >
                         <Ionicons name="list-outline" size={16} color={Colors.primary} />
@@ -1066,7 +1144,7 @@ export default function PetsScreen() {
                     {!hasMore && petLogs.length > 0 && (
                       <TouchableOpacity
                         style={styles.viewAllRecordsBtn}
-                        onPress={() => navigation.navigate('History')}
+                        onPress={() => navigation.navigate('Records')}
                         activeOpacity={0.8}
                       >
                         <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />

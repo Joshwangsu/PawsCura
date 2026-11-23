@@ -1,7 +1,9 @@
 import 'react-native-url-polyfill/auto';
-import * as ReactNative from 'react-native';
-import jsxRuntime from 'react/jsx-runtime';
-import jsxDevRuntime from 'react/jsx-dev-runtime';
+
+// Use CommonJS require('react-native') directly so Babel does NOT wrap it in
+// _interopNamespace() (which creates a shallow copy object and prevents
+// InteractionManager from being defined on the real react-native module).
+const ReactNative = require('react-native');
 
 // Polyfill InteractionManager for React Native 0.88 / Expo SDK 58 compatibility
 const polyfill = {
@@ -28,8 +30,9 @@ try {
   Object.defineProperty(ReactNative, 'InteractionManager', {
     configurable: true,
     enumerable: true,
-    writable: true,
-    value: polyfill,
+    get() {
+      return polyfill;
+    },
   });
 } catch (e) {
   try {
@@ -108,56 +111,66 @@ export function resolveAppFont(weight) {
 }
 
 function applyAppFontToTextProps(type, props) {
-  if (!props) return props;
-  if (type !== ReactNative.Text && type !== ReactNative.TextInput) {
-    return props;
-  }
-  const flat = ReactNative.StyleSheet.flatten(props.style) || {};
-  // Preserve icon fonts (e.g., Ionicons, MaterialIcons)
-  if (flat.fontFamily && !String(flat.fontFamily).startsWith('PublicSans')) {
-    return props;
-  }
-  const targetFamily = flat.fontFamily || resolveAppFont(flat.fontWeight);
-  return {
-    ...props,
-    style: [props.style, { fontFamily: targetFamily, fontWeight: undefined }],
-  };
-}
-
-// Wrap JSX runtimes so all <Text> and <TextInput> use Public Sans
-if (jsxRuntime) {
-  const origJsx = jsxRuntime.__origJsx || jsxRuntime.jsx;
-  const origJsxs = jsxRuntime.__origJsxs || jsxRuntime.jsxs;
-  jsxRuntime.__origJsx = origJsx;
-  jsxRuntime.__origJsxs = origJsxs;
-  if (typeof origJsx === 'function') {
-    jsxRuntime.jsx = function (type, props, key) {
-      return origJsx.call(this, type, applyAppFontToTextProps(type, props), key);
+  try {
+    if (!props) return props;
+    if (type !== ReactNative.Text && type !== ReactNative.TextInput) {
+      return props;
+    }
+    const flat = ReactNative.StyleSheet.flatten(props.style) || {};
+    // Preserve icon fonts (e.g., Ionicons, MaterialIcons)
+    if (flat.fontFamily && !String(flat.fontFamily).startsWith('PublicSans')) {
+      return props;
+    }
+    const targetFamily = flat.fontFamily || resolveAppFont(flat.fontWeight);
+    return {
+      ...props,
+      style: [props.style, { fontFamily: targetFamily, fontWeight: undefined }],
     };
-  }
-  if (typeof origJsxs === 'function') {
-    jsxRuntime.jsxs = function (type, props, key) {
-      return origJsxs.call(this, type, applyAppFontToTextProps(type, props), key);
-    };
+  } catch (e) {
+    return props;
   }
 }
 
-if (jsxDevRuntime) {
-  const origJsxDEV = jsxDevRuntime.__origJsxDEV || jsxDevRuntime.jsxDEV;
-  jsxDevRuntime.__origJsxDEV = origJsxDEV;
-  if (typeof origJsxDEV === 'function') {
-    jsxDevRuntime.jsxDEV = function (type, props, key, isStaticChildren, source, self) {
-      return origJsxDEV.call(
-        this,
-        type,
-        applyAppFontToTextProps(type, props),
-        key,
-        isStaticChildren,
-        source,
-        self
-      );
-    };
+// Wrap JSX runtimes safely so all <Text> and <TextInput> use Public Sans
+try {
+  const jsxRuntime = require('react/jsx-runtime');
+  if (jsxRuntime) {
+    const origJsx = jsxRuntime.__origJsx || jsxRuntime.jsx;
+    const origJsxs = jsxRuntime.__origJsxs || jsxRuntime.jsxs;
+    jsxRuntime.__origJsx = origJsx;
+    jsxRuntime.__origJsxs = origJsxs;
+    if (typeof origJsx === 'function') {
+      jsxRuntime.jsx = function (type, props, key) {
+        return origJsx.call(this, type, applyAppFontToTextProps(type, props), key);
+      };
+    }
+    if (typeof origJsxs === 'function') {
+      jsxRuntime.jsxs = function (type, props, key) {
+        return origJsxs.call(this, type, applyAppFontToTextProps(type, props), key);
+      };
+    }
   }
-}
+} catch (_) {}
+
+try {
+  const jsxDevRuntime = require('react/jsx-dev-runtime');
+  if (jsxDevRuntime) {
+    const origJsxDEV = jsxDevRuntime.__origJsxDEV || jsxDevRuntime.jsxDEV;
+    jsxDevRuntime.__origJsxDEV = origJsxDEV;
+    if (typeof origJsxDEV === 'function') {
+      jsxDevRuntime.jsxDEV = function (type, props, key, isStaticChildren, source, self) {
+        return origJsxDEV.call(
+          this,
+          type,
+          applyAppFontToTextProps(type, props),
+          key,
+          isStaticChildren,
+          source,
+          self
+        );
+      };
+    }
+  }
+} catch (_) {}
 
 export default polyfill;

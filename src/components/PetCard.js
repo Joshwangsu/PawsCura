@@ -72,17 +72,10 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
               {pet.breed || speciesLabel}
             </Text>
 
-            {pet.notes ? (
+            {!!pet.notes && (
               <Text style={styles.widgetNotes} numberOfLines={1}>
                 {pet.notes}
               </Text>
-            ) : (
-              <View style={styles.widgetMatchRow}>
-                <Ionicons name="sparkles" size={11} color={Colors.primaryLight} />
-                <Text style={styles.widgetMatchText}>
-                  {pet.accuracyScore ? `${pet.accuracyScore}% AI ID Ready` : 'Active Pet Profile'}
-                </Text>
-              </View>
             )}
           </View>
         </View>

@@ -52,6 +52,7 @@ export function AdRichCard({ ad, style, imageHeight }) {
  */
 export function AdRichRotator({ ads = [], interval = 5000 }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH);
   const flatListRef = useRef(null);
   const isUserInteractingRef = useRef(false);
 
@@ -89,7 +90,7 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
 
   const handleMomentumScrollEnd = (e) => {
     const offset = e.nativeEvent.contentOffset.x;
-    const index = Math.round(offset / SCREEN_WIDTH);
+    const index = Math.round(offset / containerWidth);
     if (index >= 0 && index < ads.length) {
       setActiveIndex(index);
     }
@@ -97,7 +98,15 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
   };
 
   return (
-    <View style={styles.rotatorContainer}>
+    <View
+      style={styles.rotatorContainer}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - containerWidth) > 1) {
+          setContainerWidth(w);
+        }
+      }}
+    >
       <FlatList
         ref={flatListRef}
         data={ads}
@@ -105,7 +114,7 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        snapToInterval={SCREEN_WIDTH}
+        snapToInterval={containerWidth}
         decelerationRate="fast"
         bounces={false}
         onScrollBeginDrag={handleScrollBeginDrag}
@@ -116,7 +125,7 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
           }, 100);
         }}
         renderItem={({ item }) => (
-          <View style={{ width: SCREEN_WIDTH }}>
+          <View style={{ width: containerWidth }}>
             <AdRichCard ad={item} />
           </View>
         )}

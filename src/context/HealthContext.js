@@ -82,13 +82,21 @@ export const HealthProvider = ({ children }) => {
     }
   };
 
+  const parseNumericField = (val) => {
+    if (val === undefined || val === null || val === '' || val === 'Unknown') {
+      return '';
+    }
+    const num = parseFloat(val);
+    return Number.isFinite(num) && num >= 0 ? num : '';
+  };
+
   const addPet = async (newPet) => {
     if (!user) return;
     try {
       await addDoc(collection(db, 'pets'), {
         ...newPet,
-        age: parseInt(newPet.age) || 0,
-        weight: parseFloat(newPet.weight) || 0,
+        age: parseNumericField(newPet.age),
+        weight: parseNumericField(newPet.weight),
         userId: user.uid,
         createdAt: serverTimestamp()
       });
@@ -120,10 +128,10 @@ export const HealthProvider = ({ children }) => {
 
       // Safely parse number values if present
       if (updatedFields.age !== undefined) {
-        payload.age = parseInt(updatedFields.age) || 0;
+        payload.age = parseNumericField(updatedFields.age);
       }
       if (updatedFields.weight !== undefined) {
-        payload.weight = parseFloat(updatedFields.weight) || 0;
+        payload.weight = parseNumericField(updatedFields.weight);
       }
 
       // Prevent crashing Firestore on empty updates
