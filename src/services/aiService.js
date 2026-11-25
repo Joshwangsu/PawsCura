@@ -6,7 +6,7 @@
  * NO external third-party cloud APIs are used.
  */
 
-import { runLocalYoloScan, BEST_PT_CLASSES } from './localYoloScanner';
+import { runLocalYoloScan, BEST_PT_CLASSES } from './localYoloScanner.js';
 
 // ── Pet Health Condition Analysis (Vision) ──────────────────────────────────
 /**
@@ -33,10 +33,6 @@ export async function chatWithVet(messageHistory) {
     setTimeout(() => {
       resolve(generateClinicalResponse(lastMessage, lower));
     }, 400);
-  });
-}
-      resolve(generateClinicalResponse(lastMessage, lower));
-    }, 600);
   });
 }
 
