@@ -42,7 +42,15 @@ export const HealthProvider = ({ children }) => {
         if (data.date && data.date.toDate) {
           formattedDate = data.date.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
-        return { ...data, id: doc.id, date: formattedDate, _timestamp: data.date };
+        return {
+          ...data,
+          id: doc.id,
+          assessmentRecordId: doc.id,
+          status: data.status || data.severity || 'Moderate',
+          severity: data.severity || data.status || 'Moderate',
+          date: formattedDate,
+          _timestamp: data.date,
+        };
       });
       // Sort client-side by date descending
       logsData.sort((a, b) => {
@@ -59,11 +67,21 @@ export const HealthProvider = ({ children }) => {
     };
   }, [user]);
 
+  const sanitizeForFirestore = (obj) => {
+    const clean = {};
+    Object.keys(obj || {}).forEach((key) => {
+      if (obj[key] !== undefined) {
+        clean[key] = obj[key];
+      }
+    });
+    return clean;
+  };
+
   const addHealthLog = async (newLog) => {
     if (!user) return;
     try {
       const docRef = await addDoc(collection(db, 'healthRecords'), {
-        ...newLog,
+        ...sanitizeForFirestore(newLog),
         userId: user.uid,
         date: serverTimestamp() // Overwrite with server time for accuracy
       });
@@ -112,7 +130,7 @@ export const HealthProvider = ({ children }) => {
     try {
       const sanitizedPhotos = newPet.referencePhotos ? sanitizeReferencePhotos(newPet.referencePhotos) : [];
       await addDoc(collection(db, 'pets'), {
-        ...newPet,
+        ...sanitizeForFirestore(newPet),
         referencePhotos: sanitizedPhotos,
         age: parseNumericField(newPet.age),
         weight: parseNumericField(newPet.weight),

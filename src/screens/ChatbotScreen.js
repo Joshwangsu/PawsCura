@@ -93,7 +93,9 @@ export default function ChatbotScreen({ route, navigation }) {
           if (scanRecordId) {
             // --- SCAN-LINKED SESSION MATCHING ---
             // A scanRecordId is present: look for a session that was already linked to this exact scan.
-            const linkedSess = loadedSessions.find((s) => s.scanRecordId === scanRecordId);
+            const linkedSess = loadedSessions.find(
+              (s) => s.scanRecordId === scanRecordId || s.assessmentRecordId === scanRecordId
+            );
             if (linkedSess) {
               // Resume the existing session for this scan
               contextSessionIdRef.current = linkedSess.id;
@@ -144,6 +146,7 @@ export default function ChatbotScreen({ route, navigation }) {
           : 'Hello! I am your AI Virtual Vet Assistant. How can I assist you with your pet today?';
 
         const defaultMsg = {
+          chatsId: activeSessionId,
           role: 'assistant',
           text: greeting,
           timestamp: serverTimestamp(),
@@ -172,9 +175,12 @@ export default function ChatbotScreen({ route, navigation }) {
 
     const newSess = {
       id: sessId,
+      chatsId: sessId,
+      userId: user.uid,
       title: newTitle,
       date: dateStr,
       updatedAt: serverTimestamp(),
+      assessmentRecordId: linkedScanRecordId || null,
       // Link this chat session to the scan health record so we can resume it later
       ...(linkedScanRecordId ? { scanRecordId: linkedScanRecordId } : {}),
     };
@@ -216,6 +222,7 @@ export default function ChatbotScreen({ route, navigation }) {
     try {
       const messagesRef = collection(db, 'chats', user.uid, 'userSessions', activeSessionId, 'messages');
       await addDoc(messagesRef, {
+        chatsId: activeSessionId,
         role: 'user',
         text: userText,
         timestamp: serverTimestamp(),
@@ -241,6 +248,7 @@ export default function ChatbotScreen({ route, navigation }) {
       const aiResponseText = await chatWithVet(history);
 
       await addDoc(messagesRef, {
+        chatsId: activeSessionId,
         role: 'assistant',
         text: aiResponseText,
         timestamp: serverTimestamp(),
@@ -250,6 +258,7 @@ export default function ChatbotScreen({ route, navigation }) {
       try {
         const messagesRef = collection(db, 'chats', user.uid, 'userSessions', activeSessionId, 'messages');
         await addDoc(messagesRef, {
+          chatsId: activeSessionId,
           role: 'assistant',
           text: 'I apologize, but I encountered a temporary connection issue while processing your question. Please try sending your message again.',
           timestamp: serverTimestamp(),

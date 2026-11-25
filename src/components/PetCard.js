@@ -11,7 +11,9 @@ export function getPetPhotoUri(pet) {
     const mime = primaryRef.mimeType || 'image/jpeg';
     return `data:${mime};base64,${primaryRef.base64}`;
   }
+  if (pet.primaryPhotoUrl) return pet.primaryPhotoUrl;
   if (pet.primaryPhotoUri) return pet.primaryPhotoUri;
+  if (primaryRef?.imageUrl) return primaryRef.imageUrl;
   if (primaryRef?.uri) return primaryRef.uri;
   if (pet.imageUrl) return pet.imageUrl;
   if (pet.photoUrl) return pet.photoUrl;

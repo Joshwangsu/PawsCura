@@ -46,9 +46,12 @@ export default function SettingsScreen({ navigation }) {
         await reloadUser();
       }
 
-      // 2. Update Firestore user document safely with merge
+      // 2. Update Firestore user document safely with merge (including Firstname & Lastname for ERD compliance)
+      const nameParts = trimmedName.split(/\s+/);
       const userDocRef = doc(db, 'users', user.uid);
       await setDoc(userDocRef, {
+        firstName: nameParts[0] || trimmedName,
+        lastName: nameParts.slice(1).join(' '),
         username: trimmedName,
         email: settingsEmail.trim()
       }, { merge: true });

@@ -388,7 +388,13 @@ export default function ScanScreen() {
     setAutoSaveStatus('saving');
     setAutoSavedPetName(pet.name);
     try {
-      // Step 1: Save the record to Firestore immediately
+      // Step 1: Save the record to Firestore immediately (includes ERD fields: severity, detectedAnomalies)
+      const normalizedAlternatives = (analysis.alternatives || []).map((alt, idx) => ({
+        id: `da_${Date.now()}_${idx}`,
+        name: alt.condition || alt.name || 'Unspecified Anomaly',
+        condition: alt.condition || alt.name || 'Unspecified Anomaly',
+        confidence: alt.confidence ?? null,
+      }));
       const logPayload = {
         petId: pet.id,
         petName: pet.name,
@@ -397,13 +403,15 @@ export default function ScanScreen() {
         issue: analysis.suspectedCondition || 'Unspecified Condition',
         description: analysis.analysis || '',
         status: analysis.urgencyLevel || 'Moderate',
+        severity: analysis.urgencyLevel || 'Moderate',
         recommendedAction: analysis.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
         imageUrl: uploadedCloudUrl || null, // will be updated after upload
         autoRecorded: true,
         confidence: analysis.confidence || null,
-        alternatives: analysis.alternatives || [],
+        alternatives: normalizedAlternatives,
+        detectedAnomalies: normalizedAlternatives,
       };
 
       const docRef = await addHealthLog(logPayload);
@@ -441,7 +449,13 @@ export default function ScanScreen() {
     
     setSaving(true);
     try {
-      // Save immediately without waiting for image upload
+      // Save immediately without waiting for image upload (includes ERD fields: severity, detectedAnomalies)
+      const normalizedAlternatives = (result.alternatives || []).map((alt, idx) => ({
+        id: `da_${Date.now()}_${idx}`,
+        name: alt.condition || alt.name || 'Unspecified Anomaly',
+        condition: alt.condition || alt.name || 'Unspecified Anomaly',
+        confidence: alt.confidence ?? null,
+      }));
       const logPayload = {
         petId: petToSave.id,
         petName: petToSave.name,
@@ -450,13 +464,15 @@ export default function ScanScreen() {
         issue: result.suspectedCondition || 'Unspecified Condition',
         description: result.analysis || '',
         status: result.urgencyLevel || 'Moderate',
+        severity: result.urgencyLevel || 'Moderate',
         recommendedAction: result.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
         imageUrl: uploadedCloudUrl || null,
         autoRecorded: false,
         confidence: result.confidence || null,
-        alternatives: result.alternatives || [],
+        alternatives: normalizedAlternatives,
+        detectedAnomalies: normalizedAlternatives,
       };
       
       const docRef = await addHealthLog(logPayload);

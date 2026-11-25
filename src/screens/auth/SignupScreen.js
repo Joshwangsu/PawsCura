@@ -120,14 +120,19 @@ export default function SignupScreen({ navigation }) {
       const userCredential = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
       
       // Update the user's display name with first + last name
-      const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
+      const firstName = form.firstName.trim();
+      const lastName = form.lastName.trim();
+      const fullName = `${firstName} ${lastName}`;
       await updateProfile(userCredential.user, {
         displayName: fullName
       });
 
-      // Explicitly initialize Firestore user profile document with default free tier schema
+      // Persist user profile matching the USERS ERD schema (Firstname, Lastname, Email, Role, ScanUsageCount, ScanUsageDate)
       const todayStr = new Date().toISOString().split('T')[0];
       await setDoc(doc(db, 'users', userCredential.user.uid), {
+        userId: userCredential.user.uid,
+        firstName,
+        lastName,
         username: fullName,
         email: form.email.trim(),
         role: 'user',
