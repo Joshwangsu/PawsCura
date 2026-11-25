@@ -111,7 +111,15 @@ function AddPetModal({ onClose, onAdd }) {
               const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
               setPhotos((prev) => [
                 ...prev.filter((p) => p.angle !== angleId),
-                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+                {
+                  id: `pp_${Date.now()}_${angleId}`,
+                  angle: angleId,
+                  uri: asset.uri,
+                  imageUrl: asset.uri,
+                  base64: asset.base64 || null,
+                  mimeType: mime,
+                  createdAt: new Date().toISOString(),
+                },
               ]);
             }
           },
@@ -135,7 +143,15 @@ function AddPetModal({ onClose, onAdd }) {
               const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
               setPhotos((prev) => [
                 ...prev.filter((p) => p.angle !== angleId),
-                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+                {
+                  id: `pp_${Date.now()}_${angleId}`,
+                  angle: angleId,
+                  uri: asset.uri,
+                  imageUrl: asset.uri,
+                  base64: asset.base64 || null,
+                  mimeType: mime,
+                  createdAt: new Date().toISOString(),
+                },
               ]);
             }
           },
@@ -176,6 +192,7 @@ function AddPetModal({ onClose, onAdd }) {
       accentColor: colorPair.accent,
       referencePhotos: photos,
       primaryPhotoUri: frontPhoto ? frontPhoto.uri : null,
+      primaryPhotoUrl: frontPhoto ? frontPhoto.uri : null,
       accuracyScore: calculateAccuracyScore(photos),
     });
 
@@ -553,7 +570,15 @@ function EditPetModal({ pet, onClose, onEdit }) {
               const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
               setPhotos((prev) => [
                 ...prev.filter((p) => p.angle !== angleId),
-                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+                {
+                  id: `pp_${Date.now()}_${angleId}`,
+                  angle: angleId,
+                  uri: asset.uri,
+                  imageUrl: asset.uri,
+                  base64: asset.base64 || null,
+                  mimeType: mime,
+                  createdAt: new Date().toISOString(),
+                },
               ]);
             }
           },
@@ -577,7 +602,15 @@ function EditPetModal({ pet, onClose, onEdit }) {
               const mime = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
               setPhotos((prev) => [
                 ...prev.filter((p) => p.angle !== angleId),
-                { angle: angleId, uri: asset.uri, base64: asset.base64, mimeType: mime },
+                {
+                  id: `pp_${Date.now()}_${angleId}`,
+                  angle: angleId,
+                  uri: asset.uri,
+                  imageUrl: asset.uri,
+                  base64: asset.base64 || null,
+                  mimeType: mime,
+                  createdAt: new Date().toISOString(),
+                },
               ]);
             }
           },
@@ -617,6 +650,7 @@ function EditPetModal({ pet, onClose, onEdit }) {
       accentColor: colorPair.accent,
       referencePhotos: photos,
       primaryPhotoUri: frontPhoto ? frontPhoto.uri : pet.primaryPhotoUri || null,
+      primaryPhotoUrl: frontPhoto ? frontPhoto.uri : pet.primaryPhotoUrl || pet.primaryPhotoUri || null,
       accuracyScore: calculateAccuracyScore(photos),
     });
     onClose();

@@ -46,11 +46,19 @@ export const SubscriptionProvider = ({ children }) => {
 
         setIsPremium(!!data.isPremium || isTestEmail);
         
-        // Sync username/email to firestore for new NoSQL schema fields if missing
-        if (!data.username || !data.email) {
+        // Sync username/email/firstName/lastName/role to firestore for ERD schema fields if missing
+        const fallbackFullName = data.username || user.displayName || (user.email ? user.email.split('@')[0] : 'User');
+        const nameParts = fallbackFullName.trim().split(/\s+/);
+        const derivedFirst = data.firstName || nameParts[0] || 'User';
+        const derivedLast = data.lastName !== undefined ? data.lastName : nameParts.slice(1).join(' ');
+        if (!data.username || !data.email || !data.firstName || !data.role) {
           updateDoc(userDocRef, {
-            username: data.username || user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
-            email: data.email || user.email || ''
+            userId: user.uid,
+            firstName: derivedFirst,
+            lastName: derivedLast,
+            username: fallbackFullName,
+            email: data.email || user.email || '',
+            role: data.role || 'user',
           }).catch(err => console.log(`Error updating user details: ${err}`));
         }
 
@@ -70,11 +78,17 @@ export const SubscriptionProvider = ({ children }) => {
           });
         }
       } else {
-        // Initialize user document for first time
+        // Initialize user document for first time matching USERS ERD schema
         const todayStr = new Date().toISOString().split('T')[0];
+        const fallbackFullName = user.displayName || (user.email ? user.email.split('@')[0] : 'User');
+        const nameParts = fallbackFullName.trim().split(/\s+/);
         setDoc(userDocRef, {
-          username: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
+          userId: user.uid,
+          firstName: nameParts[0] || 'User',
+          lastName: nameParts.slice(1).join(' '),
+          username: fallbackFullName,
           email: user.email || '',
+          role: 'user',
           isPremium: isTestEmail ? true : false,
           scanUsageCount: 0,
           scanUsageDate: todayStr
