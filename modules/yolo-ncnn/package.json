@@ -1,0 +1,11 @@
+{
+  "name": "yolo-ncnn",
+  "version": "1.0.0",
+  "description": "Standalone On-Device YOLOv11 NCNN Inference Module for PawsCura",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {},
+  "keywords": ["expo", "react-native", "ncnn", "yolov11"],
+  "author": "PawsCura",
+  "license": "UNLICENSED"
+}

@@ -351,7 +351,7 @@ export default function ScanScreen() {
         });
 
         try {
-          const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets);
+          const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets, asset.uri);
           // Keep the loading screen (and ad) up for at least SCAN_MIN_SECONDS
           const remaining = SCAN_MIN_SECONDS * 1000 - (Date.now() - startedAt);
           if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));

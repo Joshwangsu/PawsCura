@@ -222,7 +222,7 @@ Return raw JSON only. Do not surround with markdown code blocks.
  *     evaluating against our 18 YOLO symptom classes & 26 disease profiles.
  *  4. Formats description with Observations, Practical Recommendations, and What to Avoid.
  */
-export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', registeredPets = []) {
+export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', registeredPets = [], imageUri = null) {
   // Step 1: Identify pet
   let petMatch = {
     matchedPetId: registeredPets.length > 0 ? registeredPets[0].id : null,
@@ -241,28 +241,30 @@ export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', 
   const targetPetName = petMatch.matchedPetName || (registeredPets[0] ? registeredPets[0].name : 'the pet');
 
   // Step 2: On-Device Local AI performs ALL visual and symptom checking
-  const localYoloResult = await runLocalYoloScan(base64Image, mimeType, registeredPets);
+  const localYoloResult = await runLocalYoloScan(base64Image, mimeType, registeredPets, imageUri);
 
   if (!localYoloResult) {
     return generateOfflineHashedFallback(base64Image, petMatch, targetPetName);
   }
 
-  // Step 3: If Gemini API is available, generate text-only clinical description
-  // strictly from the local AI findings (no images sent to Gemini for diagnosis)
+  // Step 3: If Gemini API is available and online, generate text description strictly from local findings
   if (ai) {
     try {
       return await generateTextDescriptionFromLocalFindings(localYoloResult, petMatch, registeredPets);
     } catch (geminiErr) {
-      console.warn('Gemini text description formatting error, using local clinical text:', geminiErr.message);
+      console.warn('Gemini text formatting error (offline/unavailable):', geminiErr.message);
     }
   }
 
-  // Step 4: Standalone on-device fallback (100% offline or if Gemini fails)
+  // Step 4: When offline or without internet connection
+  // Description outputs "No internet connection" while preserving on-device symptoms, disease, severity, and urgency
   return {
     ...localYoloResult,
     matchedPetId: petMatch.matchedPetId,
     matchedPetName: targetPetName,
     matchConfidence: petMatch.matchConfidence,
+    analysis: 'No internet connection. Detailed AI clinical description is unavailable offline. Connect to the internet to generate a comprehensive AI care description.',
+    recommendedAction: localYoloResult.recommendedAction || 'Keep the affected area clean and dry, prevent self-trauma, and consult a veterinarian if symptoms persist.',
   };
 }
 
@@ -333,11 +335,14 @@ Return raw JSON only.
       recommendedAction: parsed.recommendedAction || localYoloResult.recommendedAction || 'Keep the area clean, prevent scratching, and schedule a veterinary evaluation if symptoms persist.',
     };
   } catch (err) {
+    console.warn('Gemini text generation failed (device likely offline):', err.message);
     return {
       ...localYoloResult,
       matchedPetId: petMatch.matchedPetId || localYoloResult.matchedPetId,
       matchedPetName: targetPetName,
       matchConfidence: petMatch.matchConfidence || localYoloResult.matchConfidence,
+      analysis: 'No internet connection. Detailed AI clinical description is unavailable offline. Connect to the internet to generate a comprehensive AI care description.',
+      recommendedAction: localYoloResult.recommendedAction || 'Keep the affected area clean and dry, prevent self-trauma, and monitor closely.',
     };
   }
 }

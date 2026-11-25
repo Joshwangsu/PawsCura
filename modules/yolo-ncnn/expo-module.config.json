@@ -1,0 +1,7 @@
+{
+  "name": "yolo-ncnn",
+  "platforms": ["android"],
+  "android": {
+    "modules": ["com.pawscura.yoloncnn.YoloNcnnModule"]
+  }
+}

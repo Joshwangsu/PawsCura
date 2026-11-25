@@ -572,11 +572,24 @@ export function predictClinicalDiseases(detections = [], topK = 5) {
  *  - Computes clinical severity (0..98%) using the exact veterinary formula
  *  - Differential scoring across 26 diseases using the synergy matrix
  */
-export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', registeredPets = []) {
+export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', registeredPets = [], imageUri = null) {
   const firstPet = registeredPets && registeredPets.length > 0 ? registeredPets[0] : null;
 
-  // 1. Run on-device symptom extraction from the image payload
-  const detections = extractOnDeviceSymptomDetections(base64Image);
+  // 1. Run on-device YOLOv11 inference via native NCNN (or client fallback if running in web/tests)
+  let detections = null;
+  try {
+    const { detectWithNcnn } = await import('../../modules/yolo-ncnn/index.js');
+    const ncnnDets = await detectWithNcnn(imageUri || base64Image, 0.20, 0.45);
+    if (Array.isArray(ncnnDets)) {
+      detections = ncnnDets;
+    }
+  } catch (e) {
+    // Native module not loaded in pure web or test runners
+  }
+
+  if (!detections) {
+    detections = extractOnDeviceSymptomDetections(base64Image);
+  }
 
   // 2. Evaluate Clinical Severity Scorer
   const sevInfo = evaluateClinicalSeverity(detections);
