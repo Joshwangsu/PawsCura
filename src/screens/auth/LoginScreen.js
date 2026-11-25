@@ -14,8 +14,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../services/firebaseConfig';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../services/firebaseConfig';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
 export default function LoginScreen({ navigation }) {
@@ -45,7 +46,24 @@ export default function LoginScreen({ navigation }) {
     setIsLoading(true);
     
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      
+      // Strict allowlist: Only regular 'user' accounts can access this mobile client.
+      // Rejects any non-user role with standard generic credential error to prevent account enumeration.
+      try {
+        const userDocRef = doc(db, 'users', userCredential.user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const role = userDocSnap.data()?.role;
+          if (role && role !== 'user') {
+            await signOut(auth);
+            setErrors({ form: 'Invalid email or password.' });
+            return;
+          }
+        }
+      } catch (roleErr) {
+        console.warn('Role verification check warning:', roleErr);
+      }
       // Navigation is handled automatically by AppNavigator reacting to AuthContext
     } catch (error) {
       let errorMsg = 'Failed to log in. Please try again.';

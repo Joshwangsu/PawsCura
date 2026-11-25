@@ -37,6 +37,12 @@ export const SubscriptionProvider = ({ children }) => {
           return;
         }
 
+        // Only standard user accounts are permitted on this mobile client
+        if (data.role && data.role !== 'user') {
+          signOut(auth).catch(err => console.log(err));
+          return;
+        }
+
         // Auto-upgrade test@gmail.com in Firestore if not already premium
         if (isTestEmail && !data.isPremium) {
           updateDoc(userDocRef, { isPremium: true }).catch(err => 

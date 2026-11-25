@@ -19,50 +19,22 @@ export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', 
   return await runLocalYoloScan(base64Image, mimeType, registeredPets);
 }
 
-// ── Virtual Veterinary Assistant Chat ───────────────────────────────────────
-const AI_SERVER_ENDPOINTS = [
-  process.env.EXPO_PUBLIC_AI_SERVER_URL,
-  'http://192.168.1.34:8000',
-  'http://10.0.2.2:8000',
-  'http://localhost:8000',
-].filter(Boolean);
-
+// ── Virtual Veterinary Assistant Chat (Embedded On-Device) ─────────────────
 /**
  * Chat with the PawsCura Veterinary Assistant.
- * Checks local model server first; falls back to embedded veterinary clinical engine.
+ * Uses the standalone embedded veterinary clinical engine directly on-device.
  */
 export async function chatWithVet(messageHistory) {
   const lastMessage = messageHistory[messageHistory.length - 1]?.text || '';
   const lower = lastMessage.toLowerCase().trim();
 
-  // 1. Try local AI server /chat endpoint if running
-  for (const endpoint of AI_SERVER_ENDPOINTS) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-      const res = await fetch(`${endpoint}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: lastMessage, history: messageHistory }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.reply || data.response) {
-          return data.reply || data.response;
-        }
-      }
-    } catch (e) {
-      // Local server /chat endpoint not active, proceed to embedded clinical engine
-    }
-  }
-
-  // 2. Embedded PawsCura Clinical Knowledge Engine
+  // Embedded PawsCura Clinical Knowledge Engine
   return new Promise((resolve) => {
     setTimeout(() => {
+      resolve(generateClinicalResponse(lastMessage, lower));
+    }, 400);
+  });
+}
       resolve(generateClinicalResponse(lastMessage, lower));
     }, 600);
   });

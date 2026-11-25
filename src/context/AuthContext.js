@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../services/firebaseConfig';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebaseConfig';
 
 const AuthContext = createContext();
 
@@ -13,10 +14,29 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Listen for Firebase auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (isSigningUpRef.current) {
         return;
       }
+
+      // Strict allowlist: Only 'user' accounts are permitted to authenticate in this app
+      if (currentUser) {
+        try {
+          const userDocSnap = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDocSnap.exists()) {
+            const role = userDocSnap.data()?.role;
+            if (role && role !== 'user') {
+              await signOut(auth);
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('AuthContext role verification warning:', e);
+        }
+      }
+
       setUser(currentUser);
       setLoading(false);
     });
