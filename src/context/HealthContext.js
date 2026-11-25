@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { Alert } from 'react-native';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 import { useAuth } from './AuthContext';
@@ -90,11 +91,29 @@ export const HealthProvider = ({ children }) => {
     return Number.isFinite(num) && num >= 0 ? num : '';
   };
 
+  // Sanitize reference photos so Firestore document size remains safely under the 1MB limit.
+  // Retains URI for all angles, and base64 only on the primary front photo (capped at 400KB).
+  const sanitizeReferencePhotos = (photos) => {
+    if (!Array.isArray(photos)) return [];
+    return photos.map((p, idx) => {
+      const isPrimary = p.angle === 'front' || idx === 0;
+      const keepBase64 = isPrimary && p.base64 && typeof p.base64 === 'string' && p.base64.length <= 450000;
+      return {
+        angle: p.angle || 'front',
+        uri: p.uri || '',
+        mimeType: p.mimeType || 'image/jpeg',
+        ...(keepBase64 ? { base64: p.base64 } : {})
+      };
+    });
+  };
+
   const addPet = async (newPet) => {
     if (!user) return;
     try {
+      const sanitizedPhotos = newPet.referencePhotos ? sanitizeReferencePhotos(newPet.referencePhotos) : [];
       await addDoc(collection(db, 'pets'), {
         ...newPet,
+        referencePhotos: sanitizedPhotos,
         age: parseNumericField(newPet.age),
         weight: parseNumericField(newPet.weight),
         userId: user.uid,
@@ -102,6 +121,8 @@ export const HealthProvider = ({ children }) => {
       });
     } catch (error) {
       console.error("Error adding pet: ", error);
+      Alert.alert('Save Error', 'Failed to save pet profile. Please try again.');
+      throw error;
     }
   };
 
@@ -132,6 +153,11 @@ export const HealthProvider = ({ children }) => {
       }
       if (updatedFields.weight !== undefined) {
         payload.weight = parseNumericField(updatedFields.weight);
+      }
+
+      // Sanitize reference photos if present in update
+      if (updatedFields.referencePhotos !== undefined) {
+        payload.referencePhotos = sanitizeReferencePhotos(updatedFields.referencePhotos);
       }
 
       // Prevent crashing Firestore on empty updates

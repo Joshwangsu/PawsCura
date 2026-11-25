@@ -15,7 +15,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
-import { auth } from '../../services/firebaseConfig';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../services/firebaseConfig';
 import { useAuth } from '../../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 
@@ -123,6 +124,18 @@ export default function SignupScreen({ navigation }) {
       await updateProfile(userCredential.user, {
         displayName: fullName
       });
+
+      // Explicitly initialize Firestore user profile document with default free tier schema
+      const todayStr = new Date().toISOString().split('T')[0];
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        username: fullName,
+        email: form.email.trim(),
+        role: 'user',
+        isPremium: false,
+        scanUsageCount: 0,
+        scanUsageDate: todayStr,
+        createdAt: serverTimestamp()
+      }, { merge: true });
 
       // Immediately sign them out so they aren't auto-logged in
       await signOut(auth);

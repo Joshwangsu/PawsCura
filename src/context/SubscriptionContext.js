@@ -90,13 +90,17 @@ export const SubscriptionProvider = ({ children }) => {
     if (!user || isPremium) return;
     const userDocRef = doc(db, 'users', user.uid);
     const newCount = scanUsage.count + 1;
-    await updateDoc(userDocRef, { scanUsageCount: newCount });
+    const todayStr = new Date().toISOString().split('T')[0];
+    await setDoc(userDocRef, { 
+      scanUsageCount: newCount,
+      scanUsageDate: todayStr 
+    }, { merge: true });
   };
 
   const upgradeToPremium = async () => {
     if (!user) return;
     const userDocRef = doc(db, 'users', user.uid);
-    await updateDoc(userDocRef, { isPremium: true });
+    await setDoc(userDocRef, { isPremium: true }, { merge: true });
   };
 
   return (

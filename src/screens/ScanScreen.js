@@ -225,6 +225,7 @@ export default function ScanScreen() {
   // ID of the Firestore health record created for this scan — used for chatbot session linking
   const [autoSavedRecordId, setAutoSavedRecordId] = useState(null);
   const scrollViewRef = useRef(null);
+  const isPickingRef = useRef(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -293,6 +294,10 @@ export default function ScanScreen() {
   };
 
   const handlePickImage = async (useCamera = false) => {
+    // Re-entrancy guard against rapid double-taps
+    if (loading || isPickingRef.current) return;
+    isPickingRef.current = true;
+
     try {
       if (!isPremium && scanUsage.count >= 1) {
         navigation.navigate('Paywall');
@@ -374,6 +379,8 @@ export default function ScanScreen() {
     } catch (e) {
       console.error(e);
       setLoading(false);
+    } finally {
+      isPickingRef.current = false;
     }
   };
 
