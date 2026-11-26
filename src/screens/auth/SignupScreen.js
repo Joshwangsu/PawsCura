@@ -41,11 +41,9 @@ export default function SignupScreen({ navigation }) {
 
   const updateForm = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-    // Clear the error for this field as the user types
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
-    // Update password strength live
     if (field === 'password') {
       setPasswordStrength(getPasswordStrength(value));
     }
@@ -65,7 +63,6 @@ export default function SignupScreen({ navigation }) {
 
   const validate = () => {
     const errs = {};
-    // First name: required + letters only
     if (!form.firstName.trim()) {
       errs.firstName = 'First name is required';
     } else if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'-]+$/.test(form.firstName.trim())) {
@@ -73,7 +70,6 @@ export default function SignupScreen({ navigation }) {
     } else if (form.firstName.trim().length < 2) {
       errs.firstName = 'First name must be at least 2 characters';
     }
-    // Last name: required + letters only
     if (!form.lastName.trim()) {
       errs.lastName = 'Last name is required';
     } else if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'-]+$/.test(form.lastName.trim())) {
@@ -81,13 +77,11 @@ export default function SignupScreen({ navigation }) {
     } else if (form.lastName.trim().length < 2) {
       errs.lastName = 'Last name must be at least 2 characters';
     }
-    // Email
     if (!form.email.trim()) {
       errs.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       errs.email = 'Enter a valid email address';
     }
-    // Password: required + strong rules
     if (!form.password) {
       errs.password = 'Password is required';
     } else if (form.password.length < 8) {
@@ -101,7 +95,6 @@ export default function SignupScreen({ navigation }) {
     } else if (!/[^A-Za-z0-9]/.test(form.password)) {
       errs.password = 'Must include at least one special character (!@#$...)';
     }
-    // Confirm password
     if (!form.confirmPassword) {
       errs.confirmPassword = 'Please confirm your password';
     } else if (form.password !== form.confirmPassword) {
@@ -123,7 +116,6 @@ export default function SignupScreen({ navigation }) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
       
-      // Update the user's display name with first + last name
       const firstName = form.firstName.trim();
       const lastName = form.lastName.trim();
       const fullName = `${firstName} ${lastName}`;
@@ -131,7 +123,6 @@ export default function SignupScreen({ navigation }) {
         displayName: fullName
       });
 
-      // Persist user profile matching the USERS ERD schema (Firstname, Lastname, Email, Role, ScanUsageCount, ScanUsageDate)
       const todayStr = new Date().toISOString().split('T')[0];
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         userId: userCredential.user.uid,
@@ -146,7 +137,6 @@ export default function SignupScreen({ navigation }) {
         createdAt: serverTimestamp()
       }, { merge: true });
 
-      // Immediately sign them out so they aren't auto-logged in
       await signOut(auth);
 
       showAlert({
@@ -233,7 +223,6 @@ export default function SignupScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
         >
 
-          {/* Brand Header */}
           <View style={styles.brandContainer}>
             <Image
               source={require('../../../assets/logo-horizontal.png')}
@@ -242,7 +231,6 @@ export default function SignupScreen({ navigation }) {
             />
           </View>
 
-          {/* Celebrating Kitten Mascot perched on top of the Signup Card */}
           <View style={styles.heroSection}>
             <View style={styles.mascotGlow} />
             <Image
@@ -252,7 +240,6 @@ export default function SignupScreen({ navigation }) {
             />
           </View>
 
-          {/* Card */}
           <View style={styles.card}>
             <View style={styles.cardHeaderCenter}>
               <Text style={styles.cardTitle}>Create Account</Text>
@@ -266,7 +253,6 @@ export default function SignupScreen({ navigation }) {
               </View>
             )}
 
-            {/* First Name & Last Name side by side */}
             <View style={styles.nameRow}>
               {NAME_FIELDS.map((field) => (
                 <View style={[styles.fieldGroup, styles.nameField]} key={field.key}>
@@ -301,7 +287,6 @@ export default function SignupScreen({ navigation }) {
               ))}
             </View>
 
-            {/* Other Fields */}
             {FIELDS.map((field) => {
               const isSecure = field.secure
                 ? field.toggleKey === 'showPassword'
@@ -357,7 +342,6 @@ export default function SignupScreen({ navigation }) {
                       <Text style={styles.errorText}>{errors[field.key]}</Text>
                     </View>
                   )}
-                  {/* Password strength meter */}
                   {field.key === 'password' && form.password.length > 0 && (
                     <View style={styles.strengthContainer}>
                       <View style={styles.strengthBars}>
@@ -386,7 +370,6 @@ export default function SignupScreen({ navigation }) {
                       </Text>
                     </View>
                   )}
-                  {/* Password requirement hints */}
                   {field.key === 'password' && form.password.length > 0 && (
                     <View style={styles.hintBox}>
                       {[
@@ -418,7 +401,6 @@ export default function SignupScreen({ navigation }) {
               );
             })}
 
-            {/* Terms note */}
             <View style={styles.termsRow}>
               <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
               <Text style={styles.termsText}>
@@ -451,7 +433,6 @@ export default function SignupScreen({ navigation }) {
               </Text>
             </View>
 
-            {/* Signup Button */}
             <TouchableOpacity
               style={styles.signupBtn}
               onPress={handleSignup}
@@ -474,10 +455,8 @@ export default function SignupScreen({ navigation }) {
                 )}
               </LinearGradient>
             </TouchableOpacity>
-            {/* Spacer before login */}
             <View style={{ height: Spacing.md }} />
 
-            {/* Login link */}
             <View style={styles.loginRow}>
               <Text style={styles.loginText}>Already have an account? </Text>
               <TouchableOpacity onPress={() => navigation.goBack()}>

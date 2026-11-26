@@ -32,19 +32,16 @@ export default function AppNavigator() {
       }}
     >
       {!user ? (
-        // Auth stack
         <>
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Signup" component={SignupScreen} />
         </>
       ) : (
-        // Main app
         <>
           <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           
-          {/* Global Modals/Overlays */}
           <Stack.Screen 
             name="Chatbot" 
             component={ChatbotScreen} 

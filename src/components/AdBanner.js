@@ -26,7 +26,6 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
   const flatListRef = useRef(null);
   const isDraggingRef = useRef(false);
 
-  // Filter out any dismissed ads
   const visibleAds = (ads || []).filter(
     (a) => a && !isDismissed(a.id) && !(dismissKey && isDismissed(dismissKey))
   );
@@ -50,7 +49,6 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
             animated: true,
           });
         } catch (e) {
-          // ignore layout timing errors
         }
         return next;
       });
@@ -67,7 +65,6 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
     forceUpdate((n) => n + 1);
   };
 
-  // Single ad fallback
   if (visibleAds.length === 1) {
     const single = visibleAds[0];
     return (
@@ -100,7 +97,6 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
     );
   }
 
-  // Multi-ad swiping carousel
   return (
     <View
       style={styles.container}
@@ -173,7 +169,6 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
         )}
       />
 
-      {/* Subtle indicator dots */}
       <View style={styles.dotsRow}>
         {visibleAds.map((_, i) => (
           <View

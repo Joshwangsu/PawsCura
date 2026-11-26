@@ -3,14 +3,10 @@ import { isClinicOpenNow } from '../utils/clinicHours';
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 const CACHE_KEY = '@paws_cura_clinics_cache';
-const CACHE_EXPIRY_MS = 1000 * 60 * 60 * 24; // 24 hours
+const CACHE_EXPIRY_MS = 1000 * 60 * 60 * 24;
 
-/**
- * Calculates the distance between two coordinate points in kilometers.
- * Uses the Haversine formula.
- */
 export function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
 
@@ -41,10 +37,6 @@ function refreshCachedClinicStatuses(clinics, userLat, userLon) {
     .sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
-/**
- * Fetches nearby veterinary clinics based on the user's location.
- * Queries the official Google Maps Places API for "veterinary_care" near the user.
- */
 export async function getNearbyVeterinarians(latitude, longitude) {
   if (!API_KEY) {
     console.warn('Google Maps API key is missing. Using fallback data.');
@@ -91,9 +83,6 @@ export async function getNearbyVeterinarians(latitude, longitude) {
   }
 }
 
-/**
- * Transforms the raw Google Places JSON into the format our ClinicCard expects
- */
 function formatGoogleResponse(results, userLat, userLon) {
   const now = new Date();
   const defaultSchedule = [
@@ -131,7 +120,6 @@ function formatGoogleResponse(results, userLat, userLon) {
     const clinicLon = place.geometry?.location?.lng || 0;
     const distanceKm = calculateDistance(userLat, userLon, clinicLat, clinicLon);
 
-    // Prefer Google Places live open_now if present, otherwise evaluate local schedule
     const isOpen =
       typeof place.opening_hours?.open_now === 'boolean'
         ? place.opening_hours.open_now
@@ -158,9 +146,6 @@ function formatGoogleResponse(results, userLat, userLon) {
   });
 }
 
-/**
- * Fallback in case the Google Maps API fails or rate-limits us.
- */
 function getFallbackClinics(userLat, userLon) {
   return formatGoogleResponse(
     [

@@ -19,7 +19,6 @@ export default function SplashScreen({ onFinish }) {
   const waveHop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // 1. Smooth entrance
     Animated.parallel([
       Animated.timing(contentOpacity, {
         toValue: 1,
@@ -41,7 +40,6 @@ export default function SplashScreen({ onFinish }) {
       }),
     ]).start();
 
-    // 2. Subtle, natural welcoming wave on the Login puppy without distorting the PNG
     const oneWave = Animated.parallel([
       Animated.sequence([
         Animated.timing(waveRotate, { toValue: -1, duration: 130, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -64,7 +62,6 @@ export default function SplashScreen({ onFinish }) {
     ]);
     waveAnim.start();
 
-    // 3. Smooth fade-out transition into Login / Main screen
     const timer = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
@@ -140,7 +137,6 @@ export default function SplashScreen({ onFinish }) {
           </View>
         </Animated.View>
 
-        {/* Footer */}
         <Animated.View style={[styles.footer, { opacity: contentOpacity }]}>
           <Text style={styles.footerText}>Smart Care For Your Furry Friends</Text>
         </Animated.View>

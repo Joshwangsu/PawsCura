@@ -17,7 +17,6 @@ import { openAd } from './AdBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-/** Large inline rich-media card with image + CTA */
 export function AdRichCard({ ad, style, imageHeight }) {
   if (!ad) return null;
   return (
@@ -47,10 +46,6 @@ export function AdRichCard({ ad, style, imageHeight }) {
   );
 }
 
-/**
- * Cycles through rich ads at intervals with smooth animated swipe transitions.
- * Supports both automatic timed swiping and interactive horizontal gesture swiping.
- */
 export function AdRichRotator({ ads = [], interval = 5000 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH);
@@ -70,7 +65,6 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
             animated: true,
           });
         } catch (e) {
-          // Ignore index errors if layout hasn't completed
         }
         return next;
       });
@@ -133,7 +127,6 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
         )}
       />
 
-      {/* Pagination indicators */}
       {ads.length > 1 && (
         <View style={styles.pagination}>
           {ads.map((_, i) => (
@@ -151,7 +144,6 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
   );
 }
 
-/** Full-screen popup shown once per app session */
 export function AdPopup({ ad }) {
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);

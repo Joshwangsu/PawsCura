@@ -52,8 +52,6 @@ export default function LoginScreen({ navigation }) {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       
-      // Strict allowlist: Only regular 'user' accounts can access this mobile client.
-      // Rejects any non-user role with standard generic credential error to prevent account enumeration.
       try {
         const userDocRef = doc(db, 'users', userCredential.user.uid);
         const userDocSnap = await getDoc(userDocRef);
@@ -68,7 +66,6 @@ export default function LoginScreen({ navigation }) {
       } catch (roleErr) {
         console.warn('Role verification check warning:', roleErr);
       }
-      // Navigation is handled automatically by AppNavigator reacting to AuthContext
     } catch (error) {
       let errorMsg = 'Failed to log in. Please try again.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
@@ -108,7 +105,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-
   return (
     <LinearGradient
       colors={['#FFF8F1', '#F3D9BF', '#794B35']}
@@ -124,7 +120,6 @@ export default function LoginScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Top Brand Header */}
           <View style={styles.brandHeader}>
             <Image
               source={require('../../../assets/logo-horizontal.png')}
@@ -133,7 +128,6 @@ export default function LoginScreen({ navigation }) {
             />
           </View>
 
-          {/* Waving Puppy Mascot perched on top of the Login Card */}
           <View style={styles.heroSection}>
             <View style={styles.mascotGlow} />
             <Image
@@ -143,7 +137,6 @@ export default function LoginScreen({ navigation }) {
             />
           </View>
 
-          {/* Card */}
           <View style={styles.card}>
             <View style={styles.cardHeaderCenter}>
               <Text style={styles.cardTitle}>Welcome Back!</Text>
@@ -157,7 +150,6 @@ export default function LoginScreen({ navigation }) {
               </View>
             )}
 
-            {/* Email */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Email Address</Text>
               <View style={[styles.inputRow, errors.email && styles.inputError]}>
@@ -176,7 +168,6 @@ export default function LoginScreen({ navigation }) {
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
 
-            {/* Password */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Password</Text>
               <View style={[styles.inputRow, errors.password && styles.inputError]}>
@@ -200,12 +191,10 @@ export default function LoginScreen({ navigation }) {
               {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
             </View>
 
-            {/* Forgot password */}
             <TouchableOpacity style={styles.forgotRow} onPress={handleForgotPassword}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
 
-            {/* Login Button */}
             <TouchableOpacity
               style={styles.loginBtn}
               onPress={handleLogin}
@@ -229,10 +218,8 @@ export default function LoginScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Spacer before sign up */}
             <View style={{ height: Spacing.md }} />
 
-            {/* Sign up link */}
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>Don't have an account? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Signup')}>

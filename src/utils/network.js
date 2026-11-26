@@ -1,10 +1,3 @@
-/**
- * PawsCura Network Reachability & Gemini API Error Classification Utility
- *
- * Distinguishes genuine offline states from API, rate-limit, timeout, server,
- * and authentication errors across Android, iOS, and Web without relying on
- * stale OS flags during Wi-Fi <-> mobile data handoffs.
- */
 
 export const ERROR_TYPES = {
   NO_INTERNET: 'NO_INTERNET',
@@ -43,7 +36,6 @@ async function probeUrl(url, timeoutMs) {
       cache: 'no-store',
       signal: controller.signal,
     });
-    // Any HTTP response proves DNS, TLS, and internet routing succeeded
     return typeof res?.status === 'number';
   } catch {
     return false;
@@ -52,10 +44,6 @@ async function probeUrl(url, timeoutMs) {
   }
 }
 
-/**
- * Checks whether the device has active internet routing right now (uncached).
- * Note: Returning true confirms internet access, NOT that Gemini itself is healthy.
- */
 export async function checkInternetConnectivity(timeoutMs = 2500) {
   for (const url of CONNECTIVITY_PROBES) {
     const ok = await probeUrl(url, timeoutMs);
@@ -64,9 +52,6 @@ export async function checkInternetConnectivity(timeoutMs = 2500) {
   return false;
 }
 
-/**
- * Classifies non-OK HTTP responses from the Gemini REST API into structured errors.
- */
 export function classifyHttpError(status, apiMessage = '', model = null) {
   const msg = String(apiMessage || '').trim();
   const lower = msg.toLowerCase();
@@ -130,10 +115,6 @@ export function classifyHttpError(status, apiMessage = '', model = null) {
   });
 }
 
-/**
- * Maps thrown runtime exceptions (AbortError, SyntaxError, TypeError network failure, etc.)
- * into accurate ERROR_TYPES, factoring in real internet reachability.
- */
 export function classifyException(err, { isOnline = null, model = null } = {}) {
   if (err instanceof GeminiRequestError) return err;
 
@@ -199,9 +180,6 @@ export function classifyException(err, { isOnline = null, model = null } = {}) {
   });
 }
 
-/**
- * Returns a clear, accurate message tailored to each distinct failure category.
- */
 export function getErrorMessage(errorCode, context = 'scan_description') {
   const isValidation = context === 'validation';
   const isAction = context === 'action';
@@ -209,44 +187,44 @@ export function getErrorMessage(errorCode, context = 'scan_description') {
 
   switch (errorCode) {
     case ERROR_TYPES.NO_INTERNET:
-      if (isValidation) return 'No internet connection — skipped remote image validation and ran on-device AI.';
+      if (isValidation) return 'No internet connection. Image validation is required before running a scan. Connect to Wi-Fi or mobile data and tap Retry Validation.';
       if (isAction) return 'No internet connection detected. Please check your Wi-Fi or mobile data and try again.';
       if (isChatbot) return 'No internet connection. Please connect to Wi-Fi or mobile data to chat with the Gemini Vet Assistant.';
       return 'No internet connection. Local scan results are shown below; connect to the internet to generate a full AI care description.';
 
     case ERROR_TYPES.RATE_LIMIT:
-      if (isValidation) return 'Gemini API rate limit reached — skipped remote image validation and ran on-device AI.';
+      if (isValidation) return 'Gemini image validation quota or rate limit was reached. Scanning was paused—please wait a moment and tap Retry Validation.';
       if (isAction) return 'The AI service has reached its request quota or rate limit. Please wait a moment and try again.';
       if (isChatbot) return 'API rate limit reached: Gemini has temporarily hit its request quota. Your device is online—please wait a moment and ask again.';
       return 'AI API rate limit reached while connected to the internet. Local scan findings are shown below; detailed Gemini narrative is temporarily unavailable due to quota limits.';
 
     case ERROR_TYPES.TIMEOUT:
-      if (isValidation) return 'Gemini validation request timed out — proceeded with on-device AI.';
+      if (isValidation) return 'Gemini image validation timed out before confirming the photo. Scanning was paused—please check your connection and tap Retry Validation.';
       if (isAction) return 'The server did not respond within the allowed time (request timeout). Please try again.';
       if (isChatbot) return 'Request timeout: Your device is online, but the Gemini server did not respond in time. Please try sending your question again.';
       return 'Request timeout: Your device is online, but the Gemini server did not respond in time. Local scan findings are shown below.';
 
     case ERROR_TYPES.SERVER_ERROR:
-      if (isValidation) return 'Gemini server temporarily unavailable — proceeded with on-device AI.';
+      if (isValidation) return 'The image validation server is temporarily unavailable. Scanning was paused—please tap Retry Validation shortly.';
       if (isAction) return 'The external service returned a temporary server error. Please try again shortly.';
       if (isChatbot) return 'Server error: Your device has internet access, but Gemini is experiencing temporary high demand or server issues. Please try again shortly.';
       return 'Server error: Your device has internet access, but the Gemini server returned a temporary error. Local scan findings are shown below.';
 
     case ERROR_TYPES.AUTH_ERROR:
-      if (isValidation) return 'Gemini API authentication is invalid — skipped remote validation.';
+      if (isValidation) return 'Image validation service authentication failed. Please verify the Gemini API key configuration and retry.';
       if (isAction) return 'API authentication configuration is invalid. Please contact support or verify your API key.';
       if (isChatbot) return 'Authentication error: The Gemini API key or configuration is invalid. Please contact support or update your API credentials.';
       return 'Authentication error: Unable to authenticate with Gemini AI due to an invalid or missing API key configuration. Local scan findings remain available below.';
 
     case ERROR_TYPES.API_ERROR:
-      if (isValidation) return 'Gemini API could not validate this image — proceeded with on-device AI.';
+      if (isValidation) return 'The validation service could not verify this photo (invalid or incomplete response). Please tap Retry Validation or choose another photo.';
       if (isAction) return 'Gemini API could not process the request. Please try again with a different photo or prompt.';
       if (isChatbot) return 'Gemini API error: Your device is online, but Gemini could not process this message. Please rephrase and try again.';
       return 'Gemini API error: Your device is online, but Gemini could not process this request. Local scan findings are shown below.';
 
     case ERROR_TYPES.UNKNOWN_ERROR:
     default:
-      if (isValidation) return 'Unable to verify image with Gemini — proceeded with on-device AI.';
+      if (isValidation) return 'Image validation failed unexpectedly before running the scan. Please tap Retry Validation.';
       if (isAction) return 'An unexpected error occurred while contacting the service. Please try again.';
       if (isChatbot) return 'Unknown error: Your device is online, but an unexpected error occurred while contacting Gemini AI. Please try again.';
       return 'Unknown error: Your device is online, but an unexpected error occurred while generating the AI description. Local scan findings are shown below.';

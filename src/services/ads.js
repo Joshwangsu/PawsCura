@@ -3,7 +3,6 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { useSubscription } from '../context/SubscriptionContext';
 
-// Session-level dismissal state (resets on app restart)
 const dismissed = new Set();
 export const isDismissed = (key) => dismissed.has(key);
 export const dismiss = (key) => dismissed.add(key);
@@ -16,10 +15,6 @@ const isLive = (ad) => {
   return true;
 };
 
-/**
- * Subscribes to the `ads` collection (managed in the Admin portal) and
- * returns ads split by type. Premium users never see ads.
- */
 export function useAds(placement = 'default') {
   const { isPremium } = useSubscription();
   const [ads, setAds] = useState([]);

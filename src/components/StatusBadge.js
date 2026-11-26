@@ -5,28 +5,28 @@ import { Colors, BorderRadius, Spacing } from '../theme/colors';
 
 const STATUS_CONFIG = {
   Safe: {
-    bg: '#DCFCE7', // emerald-100
+    bg: '#DCFCE7',
     border: '#A7F3D0',
     text: '#059669',
     icon: 'shield-checkmark-outline',
     label: 'Safe — No Action',
   },
   Mild: {
-    bg: '#E0F2FE', // sky-100
+    bg: '#E0F2FE',
     border: '#BAE6FD',
     text: '#0284C7',
     icon: 'information-circle-outline',
     label: 'Mild — Low Concern',
   },
   Moderate: {
-    bg: '#FEF3C7', // amber-100
+    bg: '#FEF3C7',
     border: '#FDE68A',
     text: '#D97706',
     icon: 'warning-outline',
     label: 'Moderate — Monitor',
   },
   Urgent: {
-    bg: '#FEE2E2', // red-100
+    bg: '#FEE2E2',
     border: '#FECACA',
     text: '#DC2626',
     icon: 'alert-circle-outline',

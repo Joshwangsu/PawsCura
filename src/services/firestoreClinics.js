@@ -3,15 +3,6 @@ import { db } from './firebaseConfig';
 import { calculateDistance, getNearbyVeterinarians } from './googleMaps';
 import { isClinicOpenNow } from '../utils/clinicHours';
 
-/**
- * Fetches all active veterinary clinics from Firestore (managed by the admin web)
- * and enriches each record with distance and local-time open/closed status.
- * Falls back to Google Maps / local directory if Firestore is empty or unreachable.
- *
- * @param {number} userLat  - User's current latitude
- * @param {number} userLon  - User's current longitude
- * @returns {Promise<Array>} - Array of clinic objects sorted by distance
- */
 export async function getClinicsFromFirestore(userLat, userLon) {
   try {
     const clinicsRef = collection(db, 'vetClinics');
@@ -26,7 +17,6 @@ export async function getClinicsFromFirestore(userLat, userLon) {
     const clinics = snapshot.docs.map((doc) => {
       const data = doc.data();
 
-      // Support both flat fields and nested coordinate objects
       const clinicLat = Number(
         data.latitude ?? data.coordinates?.latitude ?? data.lat ?? 0
       );
@@ -40,7 +30,6 @@ export async function getClinicsFromFirestore(userLat, userLon) {
       const openDaysStr = data.openDays || data.days || '';
       const schedule = Array.isArray(data.schedule) ? data.schedule : [];
 
-      // Always evaluate open status in the phone's local timezone
       const isOpen = isClinicOpenNow(
         {
           ...data,
@@ -81,7 +70,7 @@ export async function getClinicsFromFirestore(userLat, userLon) {
         image: data.image || data.imageUrl || data.logo || null,
         reviews: Array.isArray(data.reviews) ? data.reviews : [],
         distance: `${distanceKm.toFixed(1)} km away`,
-        distanceKm, // raw number for sorting
+        distanceKm,
         coordinates: {
           latitude: clinicLat,
           longitude: clinicLon,

@@ -50,7 +50,6 @@ const PET_ACCENT_COLORS = [
   { bg: '#FED7AA', accent: '#F97316' },
 ];
 
-
 const EMPTY_FORM = {
   name: '',
   species: '',
@@ -68,8 +67,8 @@ function AddPetModal({ onClose, onAdd }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
-  const [photos, setPhotos] = useState([]); // [{ angle: 'front', uri, base64, mimeType }]
-  const [step, setStep] = useState(1); // 1 = Basic, 2 = Body-Part Photos, 3 = Details
+  const [photos, setPhotos] = useState([]);
+  const [step, setStep] = useState(1);
 
   const updateField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -207,7 +206,6 @@ function AddPetModal({ onClose, onAdd }) {
       style={styles.fullscreenOverlay}
     >
       <View style={[styles.addModal, { paddingTop: topInset + Spacing.sm, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {/* Modal Header */}
         <View style={styles.addModalHeader}>
           <View style={{ flex: 1, paddingRight: 12 }}>
             <Text style={styles.addModalTitle}>
@@ -222,7 +220,6 @@ function AddPetModal({ onClose, onAdd }) {
           </TouchableOpacity>
         </View>
 
-        {/* Step Indicator */}
         <View style={styles.stepRow}>
           <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]} />
           <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
@@ -238,7 +235,6 @@ function AddPetModal({ onClose, onAdd }) {
         >
           {step === 1 && (
             <>
-              {/* Pet Name */}
               <Text style={styles.fieldLabel}>Pet Name *</Text>
               <TextInput
                 style={styles.textInput}
@@ -248,7 +244,6 @@ function AddPetModal({ onClose, onAdd }) {
                 onChangeText={(v) => updateField('name', v)}
               />
 
-              {/* Species */}
               <Text style={styles.fieldLabel}>Species *</Text>
               <View style={styles.speciesGrid}>
                 {SPECIES_OPTIONS.map((sp) => (
@@ -277,7 +272,6 @@ function AddPetModal({ onClose, onAdd }) {
                 ))}
               </View>
 
-              {/* Breed */}
               <Text style={styles.fieldLabel}>Breed</Text>
               <TextInput
                 style={styles.textInput}
@@ -287,7 +281,6 @@ function AddPetModal({ onClose, onAdd }) {
                 onChangeText={(v) => updateField('breed', v)}
               />
 
-              {/* Theme Color */}
               <Text style={styles.fieldLabel}>Card Color</Text>
               <View style={styles.colorRow}>
                 {PET_ACCENT_COLORS.map((c, idx) => (
@@ -312,7 +305,6 @@ function AddPetModal({ onClose, onAdd }) {
 
           {step === 2 && (
             <>
-              {/* Guided Photo Body-Part Slots */}
               {PHOTO_ANGLES.map((angle) => {
                 const existingPhoto = photos.find((p) => p.angle === angle.id);
                 return (
@@ -358,7 +350,6 @@ function AddPetModal({ onClose, onAdd }) {
 
           {step === 3 && (
             <>
-              {/* Age + Weight */}
               <View style={styles.rowInputs}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldLabel}>Age (years)</Text>
@@ -385,7 +376,6 @@ function AddPetModal({ onClose, onAdd }) {
                 </View>
               </View>
 
-              {/* Gender */}
               <Text style={styles.fieldLabel}>Gender</Text>
               <View style={styles.genderRow}>
                 {['Male', 'Female'].map((g) => (
@@ -411,7 +401,6 @@ function AddPetModal({ onClose, onAdd }) {
                 ))}
               </View>
 
-              {/* Birthday */}
               <Text style={styles.fieldLabel}>Birthday</Text>
               <TextInput
                 style={styles.textInput}
@@ -421,7 +410,6 @@ function AddPetModal({ onClose, onAdd }) {
                 onChangeText={(v) => updateField('birthday', v)}
               />
 
-              {/* Notes */}
               <Text style={styles.fieldLabel}>Medical Notes / Allergies</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
@@ -436,7 +424,6 @@ function AddPetModal({ onClose, onAdd }) {
           )}
         </ScrollView>
 
-        {/* Footer Actions */}
         <View style={styles.addModalFooter}>
           {step > 1 && (
             <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
@@ -914,7 +901,6 @@ export default function PetsScreen({ route }) {
 
   return (
     <View style={styles.safe}>
-      {/* Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
         start={{ x: 0, y: 0 }}
@@ -947,7 +933,6 @@ export default function PetsScreen({ route }) {
         </View>
       </LinearGradient>
 
-      {/* Pet Dashboard Content */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.listContent}
@@ -984,7 +969,6 @@ export default function PetsScreen({ route }) {
           </View>
         ) : (
           <>
-            {/* Custom Dropdown Selector */}
             <TouchableOpacity
               style={styles.dropdownBtn}
               onPress={() => setShowDropdown(true)}
@@ -1006,7 +990,6 @@ export default function PetsScreen({ route }) {
               <Ionicons name="chevron-down" size={20} color={Colors.primary} />
             </TouchableOpacity>
 
-            {/* Pet Profile Details Dashboard Card */}
             <View style={styles.dashboardCard}>
               <LinearGradient
                 colors={[activePet?.accentColor || Colors.primary, activePet?.color || Colors.primaryLight]}
@@ -1026,7 +1009,6 @@ export default function PetsScreen({ route }) {
                     <Text style={styles.dashboardName}>{activePet?.name}</Text>
                   </View>
                   
-                  {/* Action buttons (Edit & Delete) */}
                   <View style={styles.dashboardHeaderActions}>
                     <TouchableOpacity
                       style={styles.headerActionBtn}
@@ -1050,7 +1032,6 @@ export default function PetsScreen({ route }) {
               </LinearGradient>
 
               <View style={styles.dashboardBody}>
-                {/* Details grid */}
                 <View style={styles.detailGrid}>
                   {[
                     { label: 'Species', value: activePet?.species, icon: 'paw' },
@@ -1066,7 +1047,6 @@ export default function PetsScreen({ route }) {
                   ))}
                 </View>
 
-                {/* Notes */}
                 {activePet?.notes ? (
                   <View style={styles.detailNotesCard}>
                     <Text style={styles.detailNotesLabel}>Notes & Conditions</Text>
@@ -1076,7 +1056,6 @@ export default function PetsScreen({ route }) {
               </View>
             </View>
 
-            {/* Health Records Section (Directly below pet card) */}
             <View style={styles.historySection}>
               <View style={styles.historyHeader}>
                 <Ionicons name="medical-outline" size={20} color={Colors.primary} />
@@ -1155,7 +1134,6 @@ export default function PetsScreen({ route }) {
 
       <AdPopup ad={popup} />
 
-      {/* Dropdown Modal List */}
       <Modal visible={showDropdown} animationType="slide" transparent>
         <TouchableOpacity 
           style={styles.dropdownOverlay} 
@@ -1221,7 +1199,6 @@ export default function PetsScreen({ route }) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Add pet inline overlay */}
       {showAddModal && (
         <AddPetModal
           onClose={() => setShowAddModal(false)}
@@ -1229,7 +1206,6 @@ export default function PetsScreen({ route }) {
         />
       )}
 
-      {/* Edit pet inline overlay */}
       {showEditModal && (
         <EditPetModal
           pet={petToEdit}
@@ -1252,7 +1228,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: Colors.background },
   listContent: { padding: Spacing.md, paddingBottom: 130 },
 
-  // Header
   header: {
     paddingHorizontal: Spacing.lg,
     paddingTop: 60,
@@ -1287,7 +1262,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.4)',
   },
 
-  // Custom Dropdown Selector styles
   dropdownBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1419,7 +1393,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  // Dashboard Card layout styles
   dashboardCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
@@ -1547,7 +1520,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Add Modal
   fullscreenOverlay: {
     position: 'absolute',
     top: 0,
@@ -1776,7 +1748,6 @@ const styles = StyleSheet.create({
   genderLabel: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
   genderLabelActive: { color: '#fff' },
 
-  // Footer
   addModalFooter: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
@@ -1868,7 +1839,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  // Empty state
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',

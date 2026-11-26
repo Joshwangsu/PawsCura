@@ -20,6 +20,11 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useNavigation } from '@react-navigation/native';
 import { analyzePetCondition } from '../services/gemini';
+import {
+  VALIDATION_STATUS,
+  normalizePetSpecies,
+  verifyRegisteredPetSpecies,
+} from '../utils/petImageValidation';
 import { checkInternetConnectivity, classifyException, getErrorMessage } from '../utils/network';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { showAlert } from '../components/CustomAlert';
@@ -117,7 +122,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
     };
   }, [visible]);
 
-  // Scan line translates 0 → 100 px (height of the scan box)
   const translateY = scanLineAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 100],
@@ -190,7 +194,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
   );
 }
 
-
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
@@ -201,19 +204,30 @@ export default function ScanScreen() {
   const scanAds = [...richInline, ...topBanners, ...bottomBanners];
   const [imageUri, setImageUri] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
+  const [imageMimeType, setImageMimeType] = useState('image/jpeg');
+  const [selectedPetId, setSelectedPetId] = useState(null);
   const [uploadedCloudUrl, setUploadedCloudUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
   const [showPetModal, setShowPetModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  // Track auto-save progress: null | 'saving' | 'saved' | 'error'
   const [autoSaveStatus, setAutoSaveStatus] = useState(null);
   const [autoSavedPetName, setAutoSavedPetName] = useState(null);
-  // ID of the Firestore health record created for this scan — used for chatbot session linking
   const [autoSavedRecordId, setAutoSavedRecordId] = useState(null);
   const scrollViewRef = useRef(null);
   const isPickingRef = useRef(false);
+
+  const selectedPet =
+    pets.find((p) => p.id === selectedPetId) || (pets.length > 0 ? pets[0] : null);
+
+  useEffect(() => {
+    if (pets.length === 0) {
+      setSelectedPetId(null);
+    } else if (!selectedPetId || !pets.some((p) => p.id === selectedPetId)) {
+      setSelectedPetId(pets[0].id);
+    }
+  }, [pets, selectedPetId]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -240,7 +254,6 @@ export default function ScanScreen() {
 
     try {
       const mimeType = uri && uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-      // Prefer the base64 string already returned by ImagePicker; fall back to expo-file-system/legacy
       const base64Data =
         base64Override ||
         imageBase64 ||
@@ -248,7 +261,6 @@ export default function ScanScreen() {
           encoding: 'base64',
         }));
 
-      // Cloudinary accepts a base64 data URI in the `file` field
       const dataUri = `data:${mimeType};base64,${base64Data}`;
 
       const body = new FormData();
@@ -289,6 +301,121 @@ export default function ScanScreen() {
     }
   };
 
+  const getRejectionTitle = (validationStatus) => {
+    switch (validationStatus) {
+      case VALIDATION_STATUS.SPECIES_MISMATCH:
+        return 'Pet Species Mismatch';
+      case VALIDATION_STATUS.MULTIPLE_ANIMALS:
+        return 'Multiple Animals Detected';
+      case VALIDATION_STATUS.UNCLEAR_OR_OBSTRUCTED:
+        return 'Unclear or Obstructed Photo';
+      case VALIDATION_STATUS.NO_ANIMAL:
+        return 'No Dog or Cat Detected';
+      case VALIDATION_STATUS.VALIDATION_FAILED:
+        return 'Image Validation Unavailable';
+      case VALIDATION_STATUS.INVALID_IMAGE:
+      default:
+        return 'Invalid Image';
+    }
+  };
+
+  const runAssessmentForImage = async (
+    uri,
+    base64Input,
+    mimeType,
+    targetPet,
+    { forceRevalidate = false } = {}
+  ) => {
+    setUploadedCloudUrl(null);
+    setResult(null);
+    setAutoSaveStatus(null);
+    setAutoSavedPetName(null);
+    setAutoSavedRecordId(null);
+    setLoading(true);
+    const startedAt = Date.now();
+
+    try {
+      const resolvedBase64 =
+        base64Input ||
+        (uri
+          ? await FileSystem.readAsStringAsync(uri, { encoding: 'base64' }).catch(() => null)
+          : null);
+
+      const analysisResult = await analyzePetCondition(
+        resolvedBase64,
+        mimeType,
+        targetPet ? [targetPet] : pets,
+        uri,
+        {
+          selectedPet: targetPet || null,
+          forceRevalidate,
+        }
+      );
+
+      if (
+        analysisResult?.isValidPet === false ||
+        analysisResult?.status === 'invalid_image' ||
+        analysisResult?.status === 'species_mismatch' ||
+        analysisResult?.status === 'validation_failed'
+      ) {
+        const allowRetryOrSwitch =
+          Boolean(analysisResult.canRetry) || analysisResult.status === 'species_mismatch';
+        if (allowRetryOrSwitch && resolvedBase64) {
+          setImageBase64(resolvedBase64);
+        } else {
+          setImageBase64(null);
+        }
+        setUploadedCloudUrl(null);
+        setAutoSaveStatus(null);
+        setAutoSavedPetName(null);
+        setAutoSavedRecordId(null);
+        setResult({
+          ...analysisResult,
+          isInvalidPetImage: true,
+          suspectedCondition: getRejectionTitle(analysisResult.validationStatus),
+          urgencyLevel: analysisResult.validationStatus || 'Invalid Image',
+          analysis:
+            analysisResult.validationReason ||
+            'Please upload a clear photo showing a single dog or cat matching your selected pet.',
+        });
+        setLoading(false);
+        return;
+      }
+
+      const uploadPromise = uploadToCloudinary(uri, resolvedBase64).catch((err) => {
+        console.warn('Cloudinary upload warning:', err);
+        return null;
+      });
+
+      const remaining = SCAN_MIN_SECONDS * 1000 - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+      setResult(analysisResult);
+      Promise.resolve(incrementScanCount()).catch((e) => console.warn('Scan count update skipped:', e?.message));
+
+      const matchedPet =
+        targetPet ||
+        (analysisResult.matchedPetId && pets.find((p) => p.id === analysisResult.matchedPetId)) ||
+        (pets.length > 0 ? pets[0] : null);
+
+      if (matchedPet) {
+        autoSaveToPetRecord(analysisResult, matchedPet, uri, resolvedBase64, uploadPromise);
+      } else if (pets.length === 0) {
+        setAutoSaveStatus('no_pets');
+      }
+    } catch (error) {
+      console.error('Scan error:', error);
+      const isOnline = await checkInternetConnectivity(2000).catch(() => null);
+      const classified = classifyException(error, { isOnline });
+      showAlert({
+        title: 'Analysis Failed',
+        message: getErrorMessage(classified.code, 'action'),
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePickImage = async (useCamera = false) => {
     // Re-entrancy guard against rapid double-taps
     if (loading || isPickingRef.current) return;
@@ -304,7 +431,7 @@ export default function ScanScreen() {
         mediaTypes: 'images',
         allowsEditing: true,
         quality: 0.9,
-        base64: true, // We need this for Gemini & Cloudinary
+        base64: true,
       };
 
       let pickerResult;
@@ -334,77 +461,14 @@ export default function ScanScreen() {
 
       if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
         const asset = pickerResult.assets[0];
+        const mimeType = asset.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
         setImageUri(asset.uri);
+        setImageMimeType(mimeType);
         setImageBase64(asset.base64 || null);
-        setUploadedCloudUrl(null);
-        setResult(null);
-        setAutoSaveStatus(null);
-        setAutoSavedPetName(null);
-        setAutoSavedRecordId(null);
 
-        const mimeType = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
-        
-        setLoading(true);
-        const startedAt = Date.now();
-
-        try {
-          const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets, asset.uri);
-
-          // Gemini gatekeeper rejected non-dog/non-cat photo before local YOLO execution
-          if (analysisResult?.status === 'invalid_image' || analysisResult?.isValidPet === false) {
-            setImageBase64(null);
-            setUploadedCloudUrl(null);
-            setAutoSaveStatus(null);
-            setAutoSavedPetName(null);
-            setAutoSavedRecordId(null);
-            setResult({
-              isInvalidPetImage: true,
-              status: 'invalid_image',
-              suspectedCondition: 'Not a Dog or Cat',
-              urgencyLevel: 'Invalid Image',
-              analysis:
-                analysisResult.validationReason ||
-                'The AI identified that this picture is not an actual dog or cat. Please upload a clear photo of a real dog or cat to run a health assessment.',
-            });
-            setLoading(false);
-            return;
-          }
-
-          // Start uploading image to Cloudinary only after passing pet validation
-          const uploadPromise = uploadToCloudinary(asset.uri, asset.base64).catch((err) => {
-            console.warn('Cloudinary upload warning:', err);
-            return null;
-          });
-
-          // Keep the loading screen (and ad) up for at least SCAN_MIN_SECONDS
-          const remaining = SCAN_MIN_SECONDS * 1000 - (Date.now() - startedAt);
-          if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
-          setResult(analysisResult);
-          Promise.resolve(incrementScanCount()).catch((e) => console.warn('Scan count update skipped:', e?.message));
-
-          // Auto-record to pet's medical history immediately after scan
-          // Priority: AI-matched pet ID > first pet in list
-          const targetPet = (analysisResult.matchedPetId && pets.find((p) => p.id === analysisResult.matchedPetId))
-            || (pets.length > 0 ? pets[0] : null);
-
-          if (targetPet) {
-            autoSaveToPetRecord(analysisResult, targetPet, asset.uri, asset.base64, uploadPromise);
-          } else if (pets.length === 0) {
-            // No pets registered yet — prompt user
-            setAutoSaveStatus('no_pets');
-          }
-        } catch (error) {
-          console.error('Scan error:', error);
-          const isOnline = await checkInternetConnectivity(2000).catch(() => null);
-          const classified = classifyException(error, { isOnline });
-          showAlert({
-            title: 'Analysis Failed',
-            message: getErrorMessage(classified.code, 'action'),
-            type: 'error',
-          });
-        } finally {
-          setLoading(false);
-        }
+        await runAssessmentForImage(asset.uri, asset.base64 || null, mimeType, selectedPet, {
+          forceRevalidate: false,
+        });
       }
     } catch (e) {
       console.error(e);
@@ -418,7 +482,6 @@ export default function ScanScreen() {
     setAutoSaveStatus('saving');
     setAutoSavedPetName(pet.name);
     try {
-      // Step 1: Save the record to Firestore immediately (includes ERD fields: severity, detectedAnomalies)
       const normalizedAlternatives = (analysis.alternatives || []).map((alt, idx) => ({
         id: `da_${Date.now()}_${idx}`,
         name: alt.condition || alt.name || 'Unspecified Anomaly',
@@ -437,7 +500,7 @@ export default function ScanScreen() {
         recommendedAction: analysis.recommendedAction || '',
         clinic: 'AI Assessment',
         vet: 'Virtual Vet Assistant',
-        imageUrl: uploadedCloudUrl || null, // will be updated after upload
+        imageUrl: uploadedCloudUrl || null,
         autoRecorded: true,
         confidence: analysis.confidence || null,
         alternatives: normalizedAlternatives,
@@ -446,10 +509,8 @@ export default function ScanScreen() {
 
       const docRef = await addHealthLog(logPayload);
       setAutoSaveStatus('saved');
-      // Store the health record ID so chatbot can link to this specific scan
       if (docRef?.id) setAutoSavedRecordId(docRef.id);
 
-      // Step 2: Resolve Cloudinary image URL and update the Firestore record
       if (localUri && docRef?.id) {
         try {
           const cloudUrl =
@@ -459,7 +520,6 @@ export default function ScanScreen() {
             await updateHealthLog(docRef.id, { imageUrl: cloudUrl });
           }
         } catch (imgErr) {
-          // Image upload failed but record is already saved — not critical
           console.warn('Image upload failed after auto-save (record still saved):', imgErr);
         }
       }
@@ -471,17 +531,27 @@ export default function ScanScreen() {
     }
   };
 
-
   const handleSaveToRecords = async (targetPet) => {
-    const petToSave = targetPet || (pets.length > 0 ? pets[0] : null);
-    if (!result || !petToSave) {
+    const petToSave = targetPet || selectedPet || (pets.length > 0 ? pets[0] : null);
+    if (!result || result.isInvalidPetImage || !petToSave) {
       setShowPetModal(true);
       return;
+    }
+
+    if (result.validation) {
+      const speciesCheck = verifyRegisteredPetSpecies(result.validation, petToSave);
+      if (!speciesCheck.matched) {
+        showAlert({
+          title: 'Pet Species Mismatch',
+          message: speciesCheck.reason,
+          type: 'warning',
+        });
+        return;
+      }
     }
     
     setSaving(true);
     try {
-      // Save immediately without waiting for image upload (includes ERD fields: severity, detectedAnomalies)
       const normalizedAlternatives = (result.alternatives || []).map((alt, idx) => ({
         id: `da_${Date.now()}_${idx}`,
         name: alt.condition || alt.name || 'Unspecified Anomaly',
@@ -513,7 +583,6 @@ export default function ScanScreen() {
       setShowPetModal(false);
       setShowSuccessModal(true);
 
-      // Async image upload after save if not already uploaded
       if (!uploadedCloudUrl && imageUri && docRef?.id) {
         try {
           const cloudUrl = await uploadToCloudinary(imageUri, imageBase64);
@@ -538,7 +607,6 @@ export default function ScanScreen() {
     }
   };
 
-
   const getUrgencyColor = (urgency) => {
     switch (urgency?.toLowerCase()?.trim()) {
       case 'safe':
@@ -559,10 +627,8 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.safe}>
-      {/* Full-screen AI scan animation */}
       <ScanLoadingModal visible={loading} ads={scanAds} />
       <ScrollView ref={scrollViewRef} style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
           start={{ x: 0, y: 0 }}
@@ -574,12 +640,70 @@ export default function ScanScreen() {
             <Text style={[styles.headerTitle, { marginBottom: 0 }]}>Pet Scan</Text>
           </View>
           <Text style={styles.headerSub}>
-            Scan visible skin conditions, wounds or anomalies with AI pet matching
+            Scan visible skin, eye, or oral anomalies for your registered pet
           </Text>
         </LinearGradient>
 
         <View style={styles.bodyContent}>
-          {/* Preview Area */}
+          {pets.length > 0 ? (
+            <View style={styles.petSelectorCard}>
+              <Text style={styles.petSelectorLabel}>Scanning For</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.petChipsRow}
+              >
+                {pets.map((pet) => {
+                  const isActive = selectedPet?.id === pet.id;
+                  const speciesLabel =
+                    normalizePetSpecies(pet.species) === 'cat'
+                      ? 'Cat'
+                      : normalizePetSpecies(pet.species) === 'dog'
+                        ? 'Dog'
+                        : pet.species || 'Pet';
+                  return (
+                    <TouchableOpacity
+                      key={pet.id}
+                      style={[styles.petChip, isActive && styles.petChipActive]}
+                      onPress={() => setSelectedPetId(pet.id)}
+                      activeOpacity={0.8}
+                      disabled={loading}
+                    >
+                      <Ionicons
+                        name="paw"
+                        size={14}
+                        color={isActive ? '#fff' : Colors.primary}
+                      />
+                      <Text
+                        style={[styles.petChipName, isActive && styles.petChipNameActive]}
+                        numberOfLines={1}
+                      >
+                        {pet.name}
+                      </Text>
+                      <Text
+                        style={[styles.petChipSpecies, isActive && styles.petChipSpeciesActive]}
+                      >
+                        {speciesLabel}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.noPetBanner}
+              onPress={() => navigation.navigate('Pets')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="paw-outline" size={16} color={Colors.primary} />
+              <Text style={styles.noPetBannerText}>
+                Add a pet profile to verify species and auto-save scans
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+
         <View style={styles.viewfinderWrapper}>
           {imageUri ? (
             <View style={styles.imagePreviewContainer}>
@@ -608,19 +732,70 @@ export default function ScanScreen() {
           )}
         </View>
 
-        {/* AI Result Card */}
         {result && !loading && result.isInvalidPetImage && (
           <View style={styles.resultCard}>
             <View style={styles.resultHeader}>
-              <Ionicons name="alert-circle" size={20} color={Colors.warning} />
-              <Text style={styles.resultTitle}>Not a Valid Pet Photo</Text>
+              <Ionicons
+                name={
+                  result.validationStatus === VALIDATION_STATUS.VALIDATION_FAILED
+                    ? 'cloud-offline-outline'
+                    : 'alert-circle'
+                }
+                size={20}
+                color={
+                  result.validationStatus === VALIDATION_STATUS.SPECIES_MISMATCH
+                    ? Colors.danger
+                    : Colors.warning
+                }
+              />
+              <Text style={styles.resultTitle}>
+                {result.suspectedCondition || getRejectionTitle(result.validationStatus)}
+              </Text>
             </View>
             <View style={styles.resultSection}>
-              <Text style={styles.resultLabel}>Description</Text>
+              <Text style={styles.resultLabel}>Reason</Text>
               <Text style={styles.resultValue}>{result.analysis}</Text>
             </View>
+
+            {result.validationStatus === VALIDATION_STATUS.SPECIES_MISMATCH &&
+              pets
+                .filter((p) => normalizePetSpecies(p.species) === result.detectedSpecies)
+                .map((matchingPet) => (
+                  <TouchableOpacity
+                    key={matchingPet.id}
+                    style={styles.retryValidationBtn}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setSelectedPetId(matchingPet.id);
+                      runAssessmentForImage(imageUri, imageBase64, imageMimeType, matchingPet, {
+                        forceRevalidate: false,
+                      });
+                    }}
+                  >
+                    <Ionicons name="swap-horizontal" size={18} color="#fff" />
+                    <Text style={styles.retryValidationBtnText}>
+                      Switch to {matchingPet.name} ({result.detectedSpecies}) & Continue
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+
+            {result.canRetry && imageUri && (
+              <TouchableOpacity
+                style={styles.retryValidationBtn}
+                activeOpacity={0.85}
+                onPress={() =>
+                  runAssessmentForImage(imageUri, imageBase64, imageMimeType, selectedPet, {
+                    forceRevalidate: true,
+                  })
+                }
+              >
+                <Ionicons name="refresh" size={18} color="#fff" />
+                <Text style={styles.retryValidationBtnText}>Retry Validation</Text>
+              </TouchableOpacity>
+            )}
+
             <Text style={styles.disclaimerText}>
-              This image was rejected before local disease analysis, was not saved to Firebase, and did not use your daily scan limit.
+              This image did not pass validation, was not sent to local AI disease analysis, was not saved to assessment history, and did not use your daily scan limit.
             </Text>
           </View>
         )}
@@ -648,25 +823,10 @@ export default function ScanScreen() {
             </View>
 
             {result.urgencyLevel && result.urgencyLevel.toLowerCase().includes('urgent') && (
-              <TouchableOpacity
-                style={styles.urgentWarningBanner}
-                activeOpacity={0.85}
-                onPress={() => showAlert({
-                  title: 'Urgent Veterinary Attention Required',
-                  message: 'Your pet may need immediate professional care. We strongly recommend visiting a nearby vet clinic as soon as possible.',
-                  type: 'warning',
-                  buttons: [
-                    { text: 'Find Nearby Clinics', onPress: () => navigation.navigate('Clinics') },
-                    { text: 'Dismiss', style: 'cancel' },
-                  ],
-                })}
-              >
+              <View style={styles.urgentWarningBanner}>
                 <Ionicons name="warning" size={18} color="#92400E" />
-                <Text style={styles.urgentWarningText}>
-                  Urgent case detected. Tap to see options.
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color="#92400E" />
-              </TouchableOpacity>
+                <Text style={styles.urgentWarningText}>Urgent Case Detected</Text>
+              </View>
             )}
 
             {Array.isArray(result.detectedSymptoms) && result.detectedSymptoms.length > 0 && (
@@ -711,7 +871,6 @@ export default function ScanScreen() {
                     petName: autoSavedPetName || result.matchedPetName || 'Pet',
                     matchedPetName: autoSavedPetName || result.matchedPetName || 'Pet',
                   },
-                  // Pass the health record ID so the chatbot can link/resume the right session
                   scanRecordId: autoSavedRecordId || null,
                 })}
                 activeOpacity={0.85}
@@ -750,6 +909,7 @@ export default function ScanScreen() {
                     <Text style={[styles.matchedLabel, { color: '#475569', fontWeight: '700' }]}>Auto-Recorded to Medical History</Text>
                     <Text style={[styles.matchedPetName, { color: '#64748B' }]} numberOfLines={1}>
                       Saved under {autoSavedPetName || 'your pet'}
+                      {result?.speciesVerified ? ` (${result.validatedSpecies} verified)` : ''}
                     </Text>
                   </View>
                 </View>
@@ -787,7 +947,6 @@ export default function ScanScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
         <View style={styles.actionButtonsRow}>
           <TouchableOpacity
             style={styles.actionBtnWrapper}
@@ -819,7 +978,6 @@ export default function ScanScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Tips */}
         <View style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
             <Ionicons name="bulb-outline" size={16} color={Colors.warning} />
@@ -834,27 +992,9 @@ export default function ScanScreen() {
             </View>
           ))}
         </View>
-
-        {/* Supported conditions */}
-        <View style={styles.conditionsCard}>
-          <Text style={styles.conditionsTitle}>18 Detectable Symptoms &amp; 26 Diseases</Text>
-          <View style={styles.conditionsTags}>
-            {[
-              'Sarcoptic & Demodectic Mange', 'Hot Spots', 'Atopic & Flea Allergy',
-              'Ringworm & Yeast Dermatitis', 'Pyoderma & Ulcers', 'Cataracts & Corneal Ulcers',
-              'Conjunctivitis & Dry Eye (KCS)', 'Eyelid Masses & Blepharitis', 'Gingivostomatitis & Oral Ulcers',
-              'Alopecia & Lichenification', 'Erythema & Crust/Scale', 'Excoriation & Swelling',
-            ].map((tag) => (
-              <View key={tag} style={styles.conditionTag}>
-                <Text style={styles.conditionTagText}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
         </View>
       </ScrollView>
 
-      {/* Select Pet Modal */}
       <Modal visible={showPetModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.petModal, { paddingBottom: Math.max(insets.bottom + 12, 24) }]}>
@@ -895,7 +1035,6 @@ export default function ScanScreen() {
         </View>
       </Modal>
 
-      {/* Success Modal */}
       <Modal visible={showSuccessModal} animationType="fade" transparent>
         <View style={styles.successModalOverlay}>
           <View style={styles.successModal}>
@@ -927,7 +1066,6 @@ export default function ScanScreen() {
         </View>
       </Modal>
 
-      {/* Saving Overlay */}
       {saving && (
         <View style={styles.savingOverlay}>
           <ActivityIndicator size="large" color="#fff" />
@@ -944,7 +1082,6 @@ const CORNER_THICKNESS = 3;
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
 
-  // Header
   header: {
     paddingHorizontal: Spacing.lg,
     paddingTop: 60,
@@ -974,8 +1111,101 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
     paddingBottom: 130,
   },
+  petSelectorCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.sm,
+  },
+  petSelectorLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  petChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  petChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  petChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  petChipName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    maxWidth: 120,
+  },
+  petChipNameActive: {
+    color: '#fff',
+  },
+  petChipSpecies: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.full,
+  },
+  petChipSpeciesActive: {
+    color: Colors.primaryDark,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  noPetBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.primaryBg,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 10,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  noPetBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  retryValidationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.full,
+    marginBottom: Spacing.sm,
+    ...Shadows.sm,
+  },
+  retryValidationBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 
-  // Viewfinder
   viewfinderWrapper: {
     alignItems: 'center',
     marginBottom: Spacing.lg,
@@ -1092,7 +1322,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Results
   resultCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
@@ -1292,7 +1521,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Action Buttons
   actionButtonsRow: {
     flexDirection: 'row',
     gap: Spacing.md,
@@ -1337,7 +1565,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
-  // Tips
   tipsCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,
@@ -1376,24 +1603,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Conditions
-  conditionsCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    ...Shadows.sm,
-  },
-  conditionsTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: Spacing.sm,
-  },
-  conditionsTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
   conditionTag: {
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -1408,7 +1617,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1468,7 +1676,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Success Modal
   successModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

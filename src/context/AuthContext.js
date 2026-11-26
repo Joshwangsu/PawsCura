@@ -13,13 +13,11 @@ export const AuthProvider = ({ children }) => {
   const isSigningUpRef = useRef(false);
 
   useEffect(() => {
-    // Listen for Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (isSigningUpRef.current) {
         return;
       }
 
-      // Strict allowlist: Only 'user' accounts are permitted to authenticate in this app
       if (currentUser) {
         try {
           const userDocSnap = await getDoc(doc(db, 'users', currentUser.uid));
@@ -47,7 +45,6 @@ export const AuthProvider = ({ children }) => {
   const reloadUser = async () => {
     if (auth.currentUser) {
       await auth.currentUser.reload();
-      // Force state update by creating a new object reference
       setUser(Object.assign({}, auth.currentUser));
     }
   };

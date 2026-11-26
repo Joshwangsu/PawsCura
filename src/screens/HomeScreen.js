@@ -20,7 +20,6 @@ import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
-
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
@@ -48,7 +47,6 @@ export default function HomeScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* ── Header ────────────────────────────────────── */}
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
           start={{ x: 0, y: 0 }}
@@ -63,7 +61,6 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             <View style={styles.headerRight}>
-              {/* Settings gear shortcut */}
               <TouchableOpacity 
                 style={styles.settingsHeaderBtn} 
                 onPress={() => navigation.navigate('Settings')} 
@@ -72,7 +69,6 @@ export default function HomeScreen({ navigation }) {
                 <Ionicons name="settings-outline" size={22} color="#fff" />
               </TouchableOpacity>
 
-              {/* Avatar */}
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
                   {initial}
@@ -83,7 +79,6 @@ export default function HomeScreen({ navigation }) {
 
         </LinearGradient>
 
-        {/* ── Premium Subscription Banner ───────────────── */}
         <View style={styles.premiumBannerContainer}>
           {isPremium ? (
             <LinearGradient
@@ -125,8 +120,6 @@ export default function HomeScreen({ navigation }) {
           )}
         </View>
 
-
-        {/* ── My Pets ───────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Pets</Text>
@@ -187,7 +180,6 @@ export default function HomeScreen({ navigation }) {
           )}
         </View>
 
-{/* ── Recent Activity ───────────────────────────── */}
         <View style={[styles.section, styles.lastSection]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
@@ -237,7 +229,6 @@ const styles = StyleSheet.create({
   },
   content: { paddingBottom: 130 },
 
-  // Header
   header: {
     paddingTop: 60,
     paddingBottom: Spacing.xl,
@@ -300,7 +291,6 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
 
-  // Empty States
   emptyCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
@@ -343,7 +333,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // CTA
   ctaWrapper: {
     marginHorizontal: Spacing.md,
     marginTop: Spacing.lg,
@@ -407,7 +396,6 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
 
-  // Sections
   section: {
     marginTop: Spacing.xl,
   },
@@ -441,7 +429,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -522,7 +509,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   premiumBannerFree: {
-    padding: 0, // Since the gradient handles padding
+    padding: 0,
   },
   premiumGradient: {
     padding: 16,

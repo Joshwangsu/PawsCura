@@ -15,7 +15,6 @@ export default function HealthLogCard({ log, onPress }) {
   const navigation = useNavigation();
   const { pets } = useHealth();
 
-  // Find matching pet to show its profile photo, or fall back to the scan image
   const matchedPet = pets?.find(
     (p) =>
       (log.petId && p.id === log.petId) ||
@@ -32,7 +31,6 @@ export default function HealthLogCard({ log, onPress }) {
   return (
     <>
       <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={handlePress}>
-        {/* Top row: date + status */}
         <View style={styles.topRow}>
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
@@ -41,7 +39,6 @@ export default function HealthLogCard({ log, onPress }) {
           <StatusBadge status={log.status} size="sm" />
         </View>
 
-        {/* Pet row with photo */}
         <View style={styles.petRow}>
           <View style={styles.petAvatarBox}>
             {petPhotoUri ? (
@@ -58,16 +55,13 @@ export default function HealthLogCard({ log, onPress }) {
           </View>
         </View>
 
-        {/* Divider */}
         <View style={styles.divider} />
 
-        {/* Issue */}
         <Text style={styles.issue}>{log.issue}</Text>
         <Text style={styles.description} numberOfLines={2}>
           {log.description}
         </Text>
 
-        {/* Footer: clinic + vet */}
         <View style={styles.footerRow}>
           <View style={styles.metaItem}>
             <Ionicons name="business-outline" size={12} color={Colors.textMuted} />
@@ -82,7 +76,6 @@ export default function HealthLogCard({ log, onPress }) {
         </View>
       </TouchableOpacity>
 
-      {/* Record Details Modal */}
       <Modal visible={showModal} animationType="slide" transparent={false} onRequestClose={() => setShowModal(false)}>
         <View style={[styles.modalFullContainer, { paddingTop: topInset + Spacing.sm, paddingBottom: Math.max(insets.bottom + 12, 24) }]}>
           <View style={styles.modalHeader}>
@@ -142,7 +135,6 @@ export default function HealthLogCard({ log, onPress }) {
                 setShowModal(false);
                 navigation.navigate('Chatbot', {
                   initialContext: ctx,
-                  // Pass the health record ID so the chatbot can resume the linked session
                   scanRecordId: log.id || null,
                 });
               }}
@@ -248,7 +240,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Modal Styles
   modalFullContainer: {
     flex: 1,
     backgroundColor: Colors.background,

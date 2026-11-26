@@ -1,36 +1,25 @@
-/**
- * PawsCura Local YOLOv11m (18-Symptom) + 26-Disease & Severity Clinical Engine
- *
- * Implements:
- *  1. 18 Unified YOLOv11 Symptom Classes (BEST_PT_CLASSES) & Intrinsic Severity Weights
- *  2. Clinical Severity Scorer (None / Mild / Moderate / Severe -> Safe / Mild / Moderate / Urgent)
- *  3. 26-Disease Veterinary Differential Classifier with Co-Occurrence Synergy Bonuses
- *  4. On-device YOLOv11m inference via native NCNN module (`modules/yolo-ncnn`)
- */
 
-// ── 1. The 18 Unified YOLOv11m Symptom Classes (0..17) ───────────────────────
 export const BEST_PT_CLASSES = [
-  'alopecia',             // 0
-  'crust_scale',          // 1
-  'erythema',             // 2
-  'excoriation',          // 3
-  'hot_spot',             // 4
-  'hyperpigmentation',    // 5
-  'lichenification',      // 6
-  'mass_growth',          // 7
-  'oral_lesion',          // 8
-  'papule_pustule',       // 9
-  'swelling',             // 10
-  'ulceration',           // 11
-  'conjunctival_redness', // 12
-  'corneal_opacity',      // 13
-  'eyelid_mass',          // 14
-  'eyelid_swelling',      // 15
-  'lens_opacity',         // 16
-  'ocular_discharge',     // 17
+  'alopecia',
+  'crust_scale',
+  'erythema',
+  'excoriation',
+  'hot_spot',
+  'hyperpigmentation',
+  'lichenification',
+  'mass_growth',
+  'oral_lesion',
+  'papule_pustule',
+  'swelling',
+  'ulceration',
+  'conjunctival_redness',
+  'corneal_opacity',
+  'eyelid_mass',
+  'eyelid_swelling',
+  'lens_opacity',
+  'ocular_discharge',
 ];
 
-// Intrinsic clinical severity weights (0.48 to 0.95)
 export const SYMPTOM_SEVERITY_WEIGHTS = {
   ulceration: 0.95,
   hot_spot: 0.90,
@@ -52,9 +41,7 @@ export const SYMPTOM_SEVERITY_WEIGHTS = {
   hyperpigmentation: 0.48,
 };
 
-// ── 2. Expanded 26 Veterinary Disease Profiles ──────────────────────────────
 export const DISEASE_PROFILES = [
-  // ------------------- DERMATOLOGICAL / SKIN CONDITIONS (14) -------------------
   {
     disease: 'Sarcoptic Mange (Canine/Feline Scabies)',
     category: 'Skin / Dermatological',
@@ -269,7 +256,6 @@ export const DISEASE_PROFILES = [
     ],
   },
 
-  // ------------------- OCULAR / OPHTHALMIC CONDITIONS (8) -------------------
   {
     disease: 'Cataract / Nuclear Sclerosis (Lens Opacity)',
     category: 'Ocular / Ophthalmic',
@@ -375,7 +361,6 @@ export const DISEASE_PROFILES = [
     ],
   },
 
-  // ------------------- ORAL / MUCOSAL CONDITIONS (4) -------------------
   {
     disease: 'Gingivostomatitis / Periodontal Disease',
     category: 'Oral',
@@ -432,7 +417,6 @@ export const DISEASE_PROFILES = [
   },
 ];
 
-// ── 3. Client-Side Severity & Disease Classifier Functions ──────────────────
 export function evaluateClinicalSeverity(detections = []) {
   if (!detections || detections.length === 0) {
     return {
@@ -561,35 +545,80 @@ export function predictClinicalDiseases(detections = [], topK = 5) {
   return ranked.slice(0, topK);
 }
 
-// ── 4. Standalone On-Device Mobile YOLOv11m Diagnostic Engine ───────────────
-/**
- * Standalone On-Device Mobile YOLO Vision & Clinical Assessment Engine.
- *
- * Runs 100% on the mobile device itself:
- *  - ZERO network calls to PC, localhost, or external servers
- *  - Inspects visual characteristics and symptom markers directly on-device
- *  - Detects bounding boxes and confidences across the 18 unified YOLO classes
- *  - Computes clinical severity (0..98%) using the exact veterinary formula
- *  - Differential scoring across 26 diseases using the synergy matrix
- */
+export const YOLO_DETECTION_CONF_THRESHOLD = 0.20;
+export const YOLO_ANCHOR_GATE_THRESHOLD = 0.40;
+export const YOLO_NMS_THRESHOLD = 0.45;
+
+export function applyDualThresholdGate(
+  detections = [],
+  anchorThreshold = YOLO_ANCHOR_GATE_THRESHOLD,
+  minConf = YOLO_DETECTION_CONF_THRESHOLD
+) {
+  if (!Array.isArray(detections) || detections.length === 0) {
+    return {
+      passedGate: false,
+      detections: [],
+      maxConfidence: 0,
+      anchorThreshold,
+      minConf,
+    };
+  }
+
+  const eligible = detections.filter((d) => {
+    const conf = Number(d?.conf ?? (d?.confidence ? d.confidence / 100 : 0));
+    return Number.isFinite(conf) && conf >= minConf;
+  });
+
+  if (eligible.length === 0) {
+    return {
+      passedGate: false,
+      detections: [],
+      maxConfidence: 0,
+      anchorThreshold,
+      minConf,
+    };
+  }
+
+  let maxConfidence = 0;
+  for (const d of eligible) {
+    const conf = Number(d?.conf ?? (d?.confidence ? d.confidence / 100 : 0));
+    if (conf > maxConfidence) maxConfidence = conf;
+  }
+
+  const passedGate = maxConfidence >= anchorThreshold;
+  return {
+    passedGate,
+    detections: passedGate ? eligible : [],
+    maxConfidence,
+    anchorThreshold,
+    minConf,
+  };
+}
+
 export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', registeredPets = [], imageUri = null) {
   const firstPet = registeredPets && registeredPets.length > 0 ? registeredPets[0] : null;
 
-  // 1. Run on-device YOLOv11 inference via native NCNN (or client fallback if running in web/tests)
-  let detections = null;
+  let rawDetections = null;
   try {
     const { detectWithNcnn } = await import('../../modules/yolo-ncnn/index.js');
-    const ncnnDets = await detectWithNcnn(imageUri || base64Image, 0.20, 0.45);
+    const ncnnDets = await detectWithNcnn(
+      imageUri || base64Image,
+      YOLO_DETECTION_CONF_THRESHOLD,
+      YOLO_NMS_THRESHOLD
+    );
     if (Array.isArray(ncnnDets)) {
-      detections = ncnnDets;
+      rawDetections = ncnnDets;
     }
   } catch (e) {
     console.warn('[YoloNcnn] detectWithNcnn error:', e?.message || e);
   }
 
-  if (!detections) {
-    detections = extractOnDeviceSymptomDetections(base64Image);
+  if (!rawDetections) {
+    rawDetections = extractOnDeviceSymptomDetections(base64Image);
   }
+
+  const gateResult = applyDualThresholdGate(rawDetections);
+  const detections = gateResult.detections;
 
   const sevInfo = evaluateClinicalSeverity(detections);
   const diseases = predictClinicalDiseases(detections, 5);
@@ -679,12 +708,6 @@ export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', reg
   };
 }
 
-/**
- * On-Device Symptom Feature Extraction.
- *
- * Samples the visual image payload directly on the mobile device
- * to extract lesion signals corresponding to our 18 YOLO symptom classes.
- */
 function extractOnDeviceSymptomDetections(base64Image) {
   if (!base64Image || typeof base64Image !== 'string' || base64Image.length < 50) {
     return [];
@@ -693,7 +716,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
   const raw = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   const len = raw.length;
 
-  // Extract multi-region spatial and chromatic feature statistics from raw image bytes
   let redChromaSum = 0;
   let darkPixelCount = 0;
   let highFreqEdges = 0;
@@ -707,7 +729,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
     const b2 = raw.charCodeAt(i + 2);
     const b3 = raw.charCodeAt(i + 3);
 
-    // Estimate RGB-like color differentials from base64 nibbles
     const valR = (b0 ^ b1) & 0xff;
     const valG = (b1 ^ b2) & 0xff;
     const valB = (b2 ^ b3) & 0xff;
@@ -724,7 +745,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
   const edgeRatio = sampleCount > 0 ? highFreqEdges / sampleCount : 0;
   const ocularRatio = sampleCount > 0 ? blueOcularShift / sampleCount : 0;
 
-  // Derive unique spatial hash for deterministic yet distinct coordinates per image
   let hash = 0;
   for (let i = 0; i < Math.min(len, 600); i++) {
     hash = (hash << 5) - hash + raw.charCodeAt(i);
@@ -735,7 +755,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
   const detections = [];
   let detIdx = 0;
 
-  // Check for Ocular conditions (corneal opacity, conjunctival redness, ocular discharge)
   if (ocularRatio > 0.18 || (uHash % 7 === 1 && edgeRatio > 0.12)) {
     detections.push({
       id: `dev_det_${detIdx++}`,
@@ -758,7 +777,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
       h: 0.22,
     });
   }
-  // Check for Acute Moist Dermatitis / Hot Spot / Ulceration
   else if (redRatio > 0.22 && edgeRatio > 0.25) {
     detections.push({
       id: `dev_det_${detIdx++}`,
@@ -781,7 +799,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
       h: 0.16,
     });
   }
-  // Check for Chronic Mange / Scabies / Alopecia with Crust & Lichenification
   else if (darkRatio > 0.15 && edgeRatio > 0.20) {
     detections.push({
       id: `dev_det_${detIdx++}`,
@@ -816,7 +833,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
       });
     }
   }
-  // Check for Erythema / Allergic Dermatitis / Papules
   else if (redRatio > 0.12 || edgeRatio > 0.15) {
     detections.push({
       id: `dev_det_${detIdx++}`,
@@ -841,7 +857,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
       });
     }
   } else {
-    // Normal / Healthy Pet coat - no elevated anomaly markers detected
     return [];
   }
 

@@ -144,7 +144,6 @@ export default function BottomTabNavigator() {
         <Tab.Screen name="Records" component={HistoryScreen} />
       </Tab.Navigator>
 
-      {/* Global Floating Chatbot Button (hidden when fullscreen modal workflow is active) */}
       {!isTabBarHidden && <DraggableChatbot />}
     </View>
   );

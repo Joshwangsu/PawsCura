@@ -35,7 +35,7 @@ export default function ClinicScreen() {
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
   const [location, setLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('loading'); // 'loading' | 'granted' | 'services_disabled' | 'permission_denied'
+  const [locationStatus, setLocationStatus] = useState('loading');
   const [errorMsg, setErrorMsg] = useState(null);
   const [clinics, setClinics] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function ClinicScreen() {
       setLoading(true);
     }
     setErrorMsg(null);
-    let lat = 14.5995; // Default: Manila fallback
+    let lat = 14.5995;
     let lng = 120.9842;
 
     try {
@@ -75,7 +75,6 @@ export default function ClinicScreen() {
             setLocation({ coords: { latitude: lat, longitude: lng } });
           }
         } else {
-          // Services are enabled & permission granted — fetch fresh GPS location
           setLocationStatus('granted');
           let loc = await Location.getLastKnownPositionAsync().catch(() => null);
           if (loc?.coords) {
@@ -126,7 +125,6 @@ export default function ClinicScreen() {
     loadLocation({ silent: false });
   }, [loadLocation]);
 
-  // Refresh location automatically when app returns to foreground (e.g., after toggling GPS in Settings)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
@@ -136,14 +134,12 @@ export default function ClinicScreen() {
     return () => subscription?.remove?.();
   }, [loadLocation]);
 
-  // Refresh when user navigates back to the Clinics tab
   useFocusEffect(
     useCallback(() => {
       loadLocation({ silent: true });
     }, [loadLocation])
   );
 
-  // While GPS is disabled or permission is denied, watch for status change without requiring app restart
   useEffect(() => {
     if (locationStatus !== 'services_disabled' && locationStatus !== 'permission_denied') {
       return undefined;
@@ -191,7 +187,6 @@ export default function ClinicScreen() {
       }
     }
 
-    // Only if all road routing servers are unreachable, fall back to direct line
     setRouteCoords([
       { latitude: oLat, longitude: oLng },
       { latitude: dLat, longitude: dLng },
@@ -214,7 +209,6 @@ export default function ClinicScreen() {
 
   return (
     <View style={styles.safe}>
-      {/* ── Top Header ── */}
       <View style={[styles.topHeader, { paddingTop: topInset + Spacing.sm }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.screenTitle}>Find Clinics</Text>
@@ -231,7 +225,6 @@ export default function ClinicScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Location disabled / permission banner */}
       {(locationStatus === 'services_disabled' || locationStatus === 'permission_denied') && (
         <View style={styles.locationWarningBanner}>
           <Ionicons name="location-outline" size={16} color="#92400E" />
@@ -255,7 +248,6 @@ export default function ClinicScreen() {
         </View>
       )}
 
-      {/* Active Route Banner */}
       {selectedClinic && (
         <View style={styles.routeActiveBanner}>
           <Text style={styles.routeActiveText} numberOfLines={1}>
@@ -267,7 +259,6 @@ export default function ClinicScreen() {
         </View>
       )}
 
-      {/* ── Map View ── */}
       <View style={styles.mapContainer}>
         {location?.coords ? (
           <InteractiveClinicMap
@@ -285,7 +276,6 @@ export default function ClinicScreen() {
         )}
       </View>
 
-      {/* Premium banner */}
       {!isPremium && (
         <View style={styles.premiumBannerWrapper}>
           <TouchableOpacity
@@ -302,7 +292,6 @@ export default function ClinicScreen() {
         </View>
       )}
 
-      {/* ── Clinic List ── */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -345,7 +334,6 @@ export default function ClinicScreen() {
         />
       )}
 
-      {/* ── Clinic Detail Modal ── */}
       {detailClinic && (
         <Modal
           visible={!!detailClinic}
@@ -354,7 +342,6 @@ export default function ClinicScreen() {
           onRequestClose={() => setDetailClinic(null)}
         >
           <View style={[styles.detailModalContainer, { paddingTop: topInset }]}>
-            {/* Header */}
             <View style={styles.detailHeader}>
               <TouchableOpacity style={styles.detailBackBtn} onPress={() => setDetailClinic(null)} activeOpacity={0.7}>
                 <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
@@ -366,7 +353,6 @@ export default function ClinicScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScrollContent}>
-              {/* Banner */}
               <View style={styles.detailBanner}>
                 <View style={styles.detailEmojiCircle}>
                   <Text style={styles.detailEmojiText}>{detailClinic.emoji || '🏥'}</Text>
@@ -380,14 +366,12 @@ export default function ClinicScreen() {
                 </View>
               </View>
 
-              {/* Description */}
               {!!detailClinic.description && (
                 <View style={styles.descriptionBox}>
                   <Text style={styles.descriptionText}>{detailClinic.description}</Text>
                 </View>
               )}
 
-              {/* Badges */}
               <View style={styles.detailBadgesRow}>
                 <View style={styles.detailBadgeChip}>
                   <Ionicons name="star" size={14} color={Colors.warning} />
@@ -416,7 +400,6 @@ export default function ClinicScreen() {
 
               <View style={styles.detailSectionDivider} />
 
-              {/* Operating Hours */}
               {(detailClinic.hours || detailClinic.openDays) && (
                 <View style={styles.detailSection}>
                   <View style={styles.sectionHeaderRow}>
@@ -424,14 +407,12 @@ export default function ClinicScreen() {
                     <Text style={styles.detailSectionTitle}>Operating Hours</Text>
                   </View>
                   <View style={styles.scheduleCard}>
-                    {/* Show as one block — admin stores this as a combined string */}
                     <View style={styles.hoursBlock}>
                       <Ionicons name="time-outline" size={15} color={Colors.primary} />
                       <Text style={styles.hoursText}>
                         {detailClinic.hours || detailClinic.openDays}
                       </Text>
                     </View>
-                    {/* If separate openDays AND hours both exist, show both */}
                     {!!detailClinic.openDays && !!detailClinic.hours && detailClinic.openDays !== detailClinic.hours && (
                       <View style={[styles.hoursBlock, { marginTop: 8 }]}>
                         <Ionicons name="calendar-outline" size={15} color={Colors.primary} />
@@ -442,7 +423,6 @@ export default function ClinicScreen() {
                 </View>
               )}
 
-              {/* Services */}
               {((detailClinic.services && detailClinic.services.length > 0) ||
                 (detailClinic.specialties && detailClinic.specialties.length > 0)) && (
                 <>
@@ -465,7 +445,6 @@ export default function ClinicScreen() {
 
               <View style={styles.detailSectionDivider} />
 
-              {/* Contact */}
               <View style={styles.detailSection}>
                 <View style={styles.sectionHeaderRow}>
                   <Ionicons name="call" size={18} color={Colors.primary} />
@@ -502,10 +481,8 @@ export default function ClinicScreen() {
                 </View>
               </View>
 
-
             </ScrollView>
 
-            {/* Footer */}
             <View style={[styles.detailFooterActions, { paddingBottom: Math.max(insets.bottom + 8, Spacing.md) }]}>
               <TouchableOpacity
                 style={styles.detailRouteBtn}
@@ -638,7 +615,6 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
   errorSub: { fontSize: 13, color: Colors.textMuted, textAlign: 'center' },
 
-  // Detail Modal
   detailModalContainer: { flex: 1, backgroundColor: Colors.background, paddingTop: Platform.OS === 'ios' ? 44 : 20 },
   detailHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

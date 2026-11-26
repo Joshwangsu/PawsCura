@@ -1,25 +1,19 @@
-// Design tokens for PawsCura
-// Palette: #FFF8F1, #F3D9BF, #D88D59, #794B35, #302B29
 export const Colors = {
-  // Primary
   primary: '#794B35',
   primaryDark: '#302B29',
   primaryLight: '#D88D59',
   primaryBg: '#F3D9BF',
   accent: '#D88D59',
 
-  // Backgrounds
   background: '#FFF8F1',
   card: '#FFFFFF',
   inputBg: '#FFF8F1',
 
-  // Text
   textPrimary: '#302B29',
   textSecondary: '#794B35',
   textMuted: '#9E8272',
   textInverse: '#FFF8F1',
 
-  // Status
   success: '#22C55E',
   successBg: '#DCFCE7',
   warning: '#D88D59',
@@ -29,14 +23,12 @@ export const Colors = {
   info: '#D88D59',
   infoBg: '#F3D9BF',
 
-  // UI & Borders (Enforce visible 10%+ contrast edges)
-  border: '#E5C5A8',       // Distinct warm edge contrast
-  borderLight: '#F3D9BF',  // Subtle inner divider
-  borderStrong: '#D88D59', // Focused or emphasized border
+  border: '#E5C5A8',
+  borderLight: '#F3D9BF',
+  borderStrong: '#D88D59',
   shadow: '#302B29',
   divider: '#F3D9BF',
 
-  // Tab bar
   tabActive: '#794B35',
   tabInactive: '#9E8272',
   tabBar: '#FFF8F1',

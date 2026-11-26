@@ -55,10 +55,9 @@ export default function PaywallScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [successType, setSuccessType] = useState('upgrade'); // 'upgrade' | 'downgrade'
+  const [successType, setSuccessType] = useState('upgrade');
   const [retainsUntilDate, setRetainsUntilDate] = useState(null);
 
-  // Payment Form States
   const [cardName, setCardName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -171,7 +170,6 @@ export default function PaywallScreen({ navigation }) {
       setErrors({});
       setShowCheckout(true);
     } else {
-      // Free plan / cancel selected
       if (!isPremium) {
         showAlert({
           title: 'Active Plan',
@@ -249,7 +247,6 @@ export default function PaywallScreen({ navigation }) {
       style={styles.container}
     >
       <View style={styles.safe}>
-        {/* Header */}
         <View style={[styles.header, { paddingTop: topInset + Spacing.sm }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -264,7 +261,6 @@ export default function PaywallScreen({ navigation }) {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 24, 40) }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero */}
           <View style={styles.heroSection}>
             <View style={styles.iconWrapper}>
               <Ionicons name="diamond" size={44} color={Colors.warning} />
@@ -273,9 +269,7 @@ export default function PaywallScreen({ navigation }) {
             <Text style={styles.subtitle}>Unlock advanced diagnostics and full clinical search tools.</Text>
           </View>
 
-          {/* Plan Options Grid */}
           <View style={styles.plansContainer}>
-            {/* Free Card */}
             <TouchableOpacity
               style={[
                 styles.planCard,
@@ -318,7 +312,6 @@ export default function PaywallScreen({ navigation }) {
               </TouchableOpacity>
             </TouchableOpacity>
 
-            {/* Premium Card */}
             <TouchableOpacity
               style={[
                 styles.planCard,
@@ -380,7 +373,6 @@ export default function PaywallScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      {/* CARD CHECKOUT MODAL */}
       <Modal visible={showCheckout} animationType="slide" transparent>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -401,7 +393,6 @@ export default function PaywallScreen({ navigation }) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.checkoutForm}>
-              {/* Order Summary */}
               <View style={styles.orderSummary}>
                 <Text style={styles.summaryLabel}>Subscription Plan:</Text>
                 <Text style={styles.summaryValue}>Premium Membership</Text>
@@ -411,7 +402,6 @@ export default function PaywallScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Form Fields */}
               <View style={styles.formGroup}>
                 <Text style={styles.inputLabel}>Cardholder Name</Text>
                 <TextInput
@@ -479,7 +469,6 @@ export default function PaywallScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Confirm Pay Button */}
               <TouchableOpacity
                 style={styles.payBtn}
                 activeOpacity={0.8}
@@ -504,7 +493,6 @@ export default function PaywallScreen({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* SUCCESS MODAL */}
       <Modal visible={showSuccess} transparent animationType="fade">
         <View style={styles.successOverlay}>
           <View style={styles.successCard}>
@@ -599,7 +587,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Plans Container
   plansContainer: {
     gap: Spacing.md,
   },
@@ -712,7 +699,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 
-  // Checkout Sheet Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -780,7 +766,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
-  // Form Fields
   formGroup: {
     marginBottom: Spacing.sm,
   },
@@ -855,7 +840,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
 
-  // Success Overlay
   successOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

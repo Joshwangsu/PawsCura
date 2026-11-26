@@ -32,7 +32,7 @@ function toJsDate(value) {
 export const SubscriptionProvider = ({ children }) => {
   const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState('free'); // 'active' | 'cancelled' | 'expired' | 'free'
+  const [subscriptionStatus, setSubscriptionStatus] = useState('free');
   const [subscriptionEndDate, setSubscriptionEndDate] = useState(null);
   const [scanUsage, setScanUsage] = useState({ count: 0, date: '' });
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,6 @@ export const SubscriptionProvider = ({ children }) => {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data();
 
-          // Log out immediately if suspended
           if (data.isSuspended) {
             signOut(auth).catch((err) => console.log(err));
             showAlert({
@@ -66,13 +65,11 @@ export const SubscriptionProvider = ({ children }) => {
             return;
           }
 
-          // Only standard user accounts are permitted on this mobile client
           if (data.role && data.role !== 'user') {
             signOut(auth).catch((err) => console.log(err));
             return;
           }
 
-          // Evaluate persisted subscription status and expiration against current time
           const endDate = toJsDate(data.subscriptionEndDate);
           const nowMs = Date.now();
           const isExpired = Boolean(endDate && endDate.getTime() <= nowMs);
@@ -107,7 +104,6 @@ export const SubscriptionProvider = ({ children }) => {
             setSubscriptionEndDate(endDate);
           }
 
-          // Sync username/email/firstName/lastName/role to Firestore for ERD schema fields if missing
           const fallbackFullName = data.username || user.displayName || (user.email ? user.email.split('@')[0] : 'User');
           const nameParts = fallbackFullName.trim().split(/\s+/);
           const derivedFirst = data.firstName || nameParts[0] || 'User';
@@ -123,7 +119,6 @@ export const SubscriptionProvider = ({ children }) => {
             }).catch((err) => console.log(`Error updating user details: ${err}`));
           }
 
-          // Check if daily scan count needs reset
           const todayStr = new Date().toISOString().split('T')[0];
           if (data.scanUsageDate !== todayStr) {
             setDoc(
@@ -142,7 +137,6 @@ export const SubscriptionProvider = ({ children }) => {
             });
           }
         } else {
-          // Initialize user document on Free plan
           const todayStr = new Date().toISOString().split('T')[0];
           const fallbackFullName = user.displayName || (user.email ? user.email.split('@')[0] : 'User');
           const nameParts = fallbackFullName.trim().split(/\s+/);
@@ -190,10 +184,6 @@ export const SubscriptionProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Activates Premium membership in Firestore after local card validation succeeds.
-   * Stores only non-sensitive metadata (card brand, last 4 digits, cardholder name).
-   */
   const activatePremiumSubscription = async ({ cardholderName = '', cardBrand = 'Card', cardLast4 = '' } = {}) => {
     if (!user?.uid) {
       throw new Error('You must be signed in to activate a subscription.');
@@ -246,9 +236,6 @@ export const SubscriptionProvider = ({ children }) => {
     };
   };
 
-  /**
-   * Cancels auto-renewal in Firestore while keeping Premium access until the paid-through date.
-   */
   const cancelSubscription = async () => {
     if (!user?.uid) {
       throw new Error('You must be signed in to cancel your subscription.');

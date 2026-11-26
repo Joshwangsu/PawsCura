@@ -18,7 +18,6 @@ const BUTTON_SIZE = 64;
 export default function DraggableChatbot() {
   const navigation = useNavigation();
   
-  // Starting position at the bottom right (above the floating pill navbar)
   const pan = useRef(new Animated.ValueXY({
     x: SCREEN_WIDTH - BUTTON_SIZE - 20,
     y: SCREEN_HEIGHT - BUTTON_SIZE - 125 
@@ -27,7 +26,6 @@ export default function DraggableChatbot() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      // We only want to take over if they move their finger a bit (distinguish drag vs tap)
       onMoveShouldSetPanResponder: (_, gestureState) => {
         const { dx, dy } = gestureState;
         return (Math.abs(dx) > 5 || Math.abs(dy) > 5);
@@ -48,14 +46,12 @@ export default function DraggableChatbot() {
       onPanResponderRelease: (e, gesture) => {
         pan.flattenOffset();
         
-        // Prevent button from going completely off screen vertically
         let newY = pan.y._value;
         if (newY < 50) newY = 50;
         if (newY > SCREEN_HEIGHT - BUTTON_SIZE - 120) newY = SCREEN_HEIGHT - BUTTON_SIZE - 120;
 
-        // Snap to left or right edge
         const centerPoint = SCREEN_WIDTH / 2;
-        const currentX = pan.x._value + (BUTTON_SIZE / 2); // Center of the button
+        const currentX = pan.x._value + (BUTTON_SIZE / 2);
         
         let newX = currentX < centerPoint ? 10 : SCREEN_WIDTH - BUTTON_SIZE - 10;
 
@@ -97,7 +93,7 @@ export default function DraggableChatbot() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    zIndex: 9999, // Float above everything
+    zIndex: 9999,
   },
   button: {
     width: BUTTON_SIZE,

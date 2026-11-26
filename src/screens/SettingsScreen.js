@@ -106,7 +106,6 @@ export default function SettingsScreen({ navigation }) {
     }
     setIsSavingSettings(true);
     try {
-      // 1. Update Auth profile cache and reload AuthContext state
       await updateProfile(auth.currentUser, {
         displayName: trimmedName
       });
@@ -114,7 +113,6 @@ export default function SettingsScreen({ navigation }) {
         await reloadUser();
       }
 
-      // 2. Update Firestore user document safely with merge (including Firstname & Lastname for ERD compliance)
       const nameParts = trimmedName.split(/\s+/);
       const userDocRef = doc(db, 'users', user.uid);
       await setDoc(userDocRef, {
@@ -160,7 +158,6 @@ export default function SettingsScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.safe}
     >
-      {/* Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
         start={{ x: 0, y: 0 }}
@@ -186,7 +183,6 @@ export default function SettingsScreen({ navigation }) {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
-        {/* Profile Card Header */}
         <View style={styles.profileCard}>
           <View style={styles.profileAvatarContainer}>
             <LinearGradient
@@ -207,7 +203,6 @@ export default function SettingsScreen({ navigation }) {
           <Text style={styles.profileEmail}>{user?.email}</Text>
         </View>
 
-        {/* Section: Personal Info */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Ionicons name="person-circle-outline" size={22} color={Colors.primary} />
@@ -244,7 +239,6 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Section: Subscription Panel */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Ionicons name="card-outline" size={22} color={Colors.primary} />
@@ -319,7 +313,6 @@ export default function SettingsScreen({ navigation }) {
           )}
         </View>
 
-        {/* Section: Account Management Actions */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Ionicons name="settings-outline" size={22} color={Colors.primary} />

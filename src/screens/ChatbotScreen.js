@@ -32,14 +32,13 @@ export default function ChatbotScreen({ route, navigation }) {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
 
-  const [activeTab, setActiveTab] = useState((initialContext || scanRecordId) ? 'chat' : 'history'); // 'chat' | 'history'
+  const [activeTab, setActiveTab] = useState((initialContext || scanRecordId) ? 'chat' : 'history');
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef(null);
-  // The session (if any) that the scan context belongs to. Manually created chats must NOT use it.
   const contextSessionIdRef = useRef(null);
   const activeSessionIdRef = useRef(null);
   const creatingSessionRef = useRef(false);
@@ -65,7 +64,6 @@ export default function ChatbotScreen({ route, navigation }) {
     }
   };
 
-  // Helper to format session title as "Pet Name - Condition"
   const formatSessionTitle = (ctx, fallbackName) => {
     if (ctx && ctx.suspectedCondition) {
       const pet = ctx.matchedPetName || ctx.petName || 'Pet';
@@ -74,7 +72,6 @@ export default function ChatbotScreen({ route, navigation }) {
     return fallbackName || 'Pet - Health Consultation';
   };
 
-  // Load / Sync Sessions & Messages for ALL logged-in users
   useEffect(() => {
     if (!user) return;
 
@@ -95,24 +92,19 @@ export default function ChatbotScreen({ route, navigation }) {
         setSessions(loadedSessions);
         if (!activeSessionIdRef.current) {
           if (scanRecordId) {
-            // --- SCAN-LINKED SESSION MATCHING ---
-            // A scanRecordId is present: look for a session that was already linked to this exact scan.
             const linkedSess = loadedSessions.find(
               (s) => s.scanRecordId === scanRecordId || s.assessmentRecordId === scanRecordId
             );
             if (linkedSess) {
-              // Resume the existing session for this scan
               contextSessionIdRef.current = linkedSess.id;
               selectActiveSession(linkedSess.id);
             } else if (!creatingSessionRef.current) {
-              // First time opening chatbot for this scan — create a new dedicated session
               createNewSession(initialTitle, scanRecordId);
             }
             return;
           }
 
           if (initialContext && initialContext.suspectedCondition) {
-            // No scanRecordId, but we have context — fallback: open most recent session
             selectActiveSession(loadedSessions[0].id);
             return;
           }
@@ -125,7 +117,6 @@ export default function ChatbotScreen({ route, navigation }) {
     return () => unsubSessions();
   }, [user, initialContext, scanRecordId]);
 
-  // Handle messages subscription for activeSessionId for ALL users
   useEffect(() => {
     if (!user || !activeSessionId) return;
 
@@ -139,7 +130,6 @@ export default function ChatbotScreen({ route, navigation }) {
       if (loaded.length === 0) {
         if (greetingInitSetRef.current.has(activeSessionId)) return;
         greetingInitSetRef.current.add(activeSessionId);
-        // Only the scan-linked session gets the scan-context greeting; new chats start fresh
         const ctx = activeSessionId === contextSessionIdRef.current ? initialContext : null;
         const pet = (ctx && (ctx.matchedPetName || ctx.petName)) || 'your pet';
         const condition = ctx ? ctx.suspectedCondition : '';
@@ -185,26 +175,21 @@ export default function ChatbotScreen({ route, navigation }) {
       date: dateStr,
       updatedAt: serverTimestamp(),
       assessmentRecordId: linkedScanRecordId || null,
-      // Link this chat session to the scan health record so we can resume it later
       ...(linkedScanRecordId ? { scanRecordId: linkedScanRecordId } : {}),
     };
 
     try {
-      // Sessions created for a scan (title/link supplied by the auto-open flow) own the scan context
       if (customTitle || linkedScanRecordId) contextSessionIdRef.current = sessId;
       selectActiveSession(sessId);
       setActiveTab('chat');
       await setDoc(doc(db, 'chats', user.uid, 'userSessions', sessId), newSess);
 
-      // Write the chatSessionId back onto the health record so history/pet pages know
-      // which chat to open when "Ask Vet" is tapped from that specific scan record.
       if (linkedScanRecordId) {
         try {
           await updateDoc(doc(db, 'healthRecords', linkedScanRecordId), {
             chatSessionId: sessId,
           });
         } catch (linkErr) {
-          // Non-critical — the scanRecordId on the session is the primary link
           console.warn('Could not write chatSessionId back to health record:', linkErr);
         }
       }
@@ -232,7 +217,6 @@ export default function ChatbotScreen({ route, navigation }) {
         timestamp: serverTimestamp(),
       });
 
-      // Update session title if first user message and not set from scan
       const userMsgs = messages.filter((m) => m.role === 'user');
       if (userMsgs.length === 0 && (!currentSession || currentSession.title.includes('Consultation #'))) {
         const snippet = userText.length > 20 ? `${userText.substring(0, 20)}...` : userText;
@@ -308,7 +292,6 @@ export default function ChatbotScreen({ route, navigation }) {
 
   return (
     <View style={styles.safe}>
-      {/* Header with History Tab & New Chat Buttons */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
         start={{ x: 0, y: 0 }}
@@ -334,7 +317,6 @@ export default function ChatbotScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* Action Controls (New Chat Button) */}
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerIconBtn}
@@ -346,7 +328,6 @@ export default function ChatbotScreen({ route, navigation }) {
         </View>
       </LinearGradient>
 
-      {/* ── Segmented Tab Switcher: Chat vs History ── */}
       <View style={styles.tabSegmentContainer}>
         <TouchableOpacity
           style={[styles.tabSegmentBtn, activeTab === 'chat' && styles.tabSegmentBtnActive]}
@@ -379,9 +360,7 @@ export default function ChatbotScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ── Active Tab View ── */}
       {activeTab === 'chat' ? (
-        /* Chat Area */
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -435,9 +414,7 @@ export default function ChatbotScreen({ route, navigation }) {
           )}
         </KeyboardAvoidingView>
       ) : (
-        /* History Area */
         <View style={styles.historyTabContainer}>
-          {/* Start New Chat Action Banner */}
           <TouchableOpacity
             style={styles.historyNewChatCard}
             onPress={() => createNewSession()}
@@ -626,7 +603,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   
-  // Messages
   messageBubble: {
     flexDirection: 'row',
     marginBottom: Spacing.md,
@@ -675,7 +651,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
 
-  // Input
   typingIndicator: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.sm,
@@ -720,7 +695,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 
-  // ChatGPT-Style Dark Side Drawer History Styles
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -826,7 +800,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── Tab Segment Switcher Styles ──
   tabSegmentContainer: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -862,7 +835,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── History Tab View Styles ──
   historyTabContainer: {
     flex: 1,
     padding: Spacing.md,

@@ -1,8 +1,3 @@
-/**
- * Standard Credit & Debit Card Validation Utilities
- * Validates cardholder name, IIN/BIN network prefix, card length, Luhn (Mod-10)
- * checksum, MM/YY expiry date (including current month), and network-specific CVV/CVC length.
- */
 
 export const CARD_BRANDS = [
   {
@@ -74,13 +69,9 @@ export function stripNonDigits(input) {
   return String(input ?? '').replace(/\D/g, '');
 }
 
-/**
- * Detects the card network from the leading IIN/BIN digits.
- */
 export function detectCardBrand(cardNumberInput) {
   const digits = stripNonDigits(cardNumberInput);
   if (!digits) return null;
-  // Check longer/more-specific prefixes before broad prefixes like 62 (UnionPay)
   const order = ['amex', 'diners', 'jcb', 'mastercard', 'discover', 'unionpay', 'visa'];
   for (const id of order) {
     const brand = CARD_BRANDS.find((b) => b.id === id);
@@ -91,9 +82,6 @@ export function detectCardBrand(cardNumberInput) {
   return null;
 }
 
-/**
- * Standard Luhn (Mod-10) check. Rejects non-digits, short PANs (<13), and repeated identical digits.
- */
 export function isValidLuhn(digitsInput) {
   const digits = stripNonDigits(digitsInput);
   if (digits.length < 13 || digits.length > 19) return false;
@@ -113,9 +101,6 @@ export function isValidLuhn(digitsInput) {
   return sum % 10 === 0;
 }
 
-/**
- * Formats card digits with hyphens: 4-6-5 for Amex (max 15 digits), 4-4-4-4(-3) otherwise.
- */
 export function formatCardNumber(input) {
   const raw = stripNonDigits(input);
   const brand = detectCardBrand(raw);
@@ -133,26 +118,17 @@ export function formatCardNumber(input) {
   return groups ? groups.join('-') : '';
 }
 
-/**
- * Formats expiry digits as MM/YY (max 4 digits).
- */
 export function formatExpiry(input) {
   const digits = stripNonDigits(input).slice(0, 4);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
-/**
- * Formats security code digits up to the network's CVV length (4 for Amex, 3 otherwise).
- */
 export function formatCvv(input, brand) {
   const maxLen = brand?.cvvLength || 3;
   return stripNonDigits(input).slice(0, maxLen);
 }
 
-/**
- * Validates cardholder name (2-60 chars, valid letters/punctuation only, first + last name).
- */
 export function validateCardholderName(name) {
   const trimmed = String(name ?? '').trim().replace(/\s+/g, ' ');
   if (!trimmed) {
@@ -171,9 +147,6 @@ export function validateCardholderName(name) {
   return { valid: true, error: null, normalized: trimmed };
 }
 
-/**
- * Validates card number against recognized IIN network prefix, valid length, and Luhn checksum.
- */
 export function validateCardNumber(cardNumberInput) {
   const digits = stripNonDigits(cardNumberInput);
   if (!digits) {
@@ -215,9 +188,6 @@ export function validateCardNumber(cardNumberInput) {
   return { valid: true, error: null, brand, digits, last4: digits.slice(-4) };
 }
 
-/**
- * Validates strict MM/YY expiration date against current calendar month/year (+20 year cap).
- */
 export function validateExpiry(expiryInput, now = new Date()) {
   const value = String(expiryInput ?? '').trim();
   const match = /^(\d{2})\/(\d{2})$/.exec(value);
@@ -248,9 +218,6 @@ export function validateExpiry(expiryInput, now = new Date()) {
   return { valid: true, error: null, month, year: fullYear };
 }
 
-/**
- * Validates security code length (4 digits for American Express, 3 digits otherwise).
- */
 export function validateCvv(cvvInput, brand = null) {
   const digits = stripNonDigits(cvvInput);
   const expectedLength = brand?.cvvLength || 3;
@@ -264,9 +231,6 @@ export function validateCvv(cvvInput, brand = null) {
   return { valid: true, error: null };
 }
 
-/**
- * Validates the complete credit/debit card checkout form.
- */
 export function validateCardForm({ cardName, cardNumber, expiry, cvv }, now = new Date()) {
   const errors = {};
 

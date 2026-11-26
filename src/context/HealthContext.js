@@ -20,7 +20,6 @@ export const HealthProvider = ({ children }) => {
       return;
     }
 
-    // Subscribe to Pets for the current user
     const qPets = query(collection(db, 'pets'), where('userId', '==', user.uid));
     const unsubPets = onSnapshot(qPets, (snapshot) => {
       const petsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
@@ -28,14 +27,13 @@ export const HealthProvider = ({ children }) => {
       petsData.sort((a, b) => {
         const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
         const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-        return timeB - timeA; // Descending
+        return timeB - timeA;
       });
       setPets(petsData);
     }, (err) => {
       console.warn('Pets snapshot error:', err?.message);
     });
 
-    // Subscribe to Health Records for the current user
     const qLogs = query(collection(db, 'healthRecords'), where('userId', '==', user.uid));
     const unsubLogs = onSnapshot(qLogs, (snapshot) => {
       const logsData = snapshot.docs.map(doc => {
@@ -54,11 +52,10 @@ export const HealthProvider = ({ children }) => {
           _timestamp: data.date,
         };
       });
-      // Sort client-side by date descending
       logsData.sort((a, b) => {
         const timeA = a._timestamp?.toMillis ? a._timestamp.toMillis() : 0;
         const timeB = b._timestamp?.toMillis ? b._timestamp.toMillis() : 0;
-        return timeB - timeA; // Descending
+        return timeB - timeA;
       });
       setHealthLogs(logsData);
     }, (err) => {
@@ -87,7 +84,7 @@ export const HealthProvider = ({ children }) => {
       const docRef = await addDoc(collection(db, 'healthRecords'), {
         ...sanitizeForFirestore(newLog),
         userId: user.uid,
-        date: serverTimestamp() // Overwrite with server time for accuracy
+        date: serverTimestamp()
       });
       return docRef;
     } catch (error) {
@@ -114,7 +111,6 @@ export const HealthProvider = ({ children }) => {
   };
 
   // Sanitize reference photos so Firestore document size remains safely under the 1MB limit.
-  // Retains URI for all angles, and base64 only on the primary front photo (capped at 400KB).
   const sanitizeReferencePhotos = (photos) => {
     if (!Array.isArray(photos)) return [];
     return photos.map((p, idx) => {
@@ -162,14 +158,12 @@ export const HealthProvider = ({ children }) => {
     try {
       const payload = {};
       
-      // Copy only defined values
       Object.keys(updatedFields).forEach((key) => {
         if (updatedFields[key] !== undefined) {
           payload[key] = updatedFields[key];
         }
       });
 
-      // Safely parse number values if present
       if (updatedFields.age !== undefined) {
         payload.age = parseNumericField(updatedFields.age);
       }
@@ -177,12 +171,10 @@ export const HealthProvider = ({ children }) => {
         payload.weight = parseNumericField(updatedFields.weight);
       }
 
-      // Sanitize reference photos if present in update
       if (updatedFields.referencePhotos !== undefined) {
         payload.referencePhotos = sanitizeReferencePhotos(updatedFields.referencePhotos);
       }
 
-      // Prevent crashing Firestore on empty updates
       if (Object.keys(payload).length === 0) {
         console.warn("updatePet called with no actual modifications.");
         return;

@@ -298,7 +298,6 @@ export default function InteractiveClinicMap({
     [userCoords, clinics, routeCoords, selectedClinic]
   );
 
-  // Create the local HTML file once when userCoords is ready
   useEffect(() => {
     let active = true;
     async function prepareHtmlFile() {
@@ -337,7 +336,6 @@ export default function InteractiveClinicMap({
     []
   );
 
-  // Push live updates imperatively without triggering DomWebView prop reloads
   useEffect(() => {
     if (!mapUri || !mapReady) return;
     pushPayloadToWebView(payload);

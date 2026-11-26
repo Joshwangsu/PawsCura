@@ -59,11 +59,9 @@ export default function HistoryScreen({ navigation }) {
     return () => loop.stop();
   }, [floatAnim]);
 
-  // Bulletproof date parser to prevent any Invalid Date / NaN outputs (including Hermes JS engine)
   const parseDate = (val) => {
-    if (!val) return new Date(); // Fallback to now
+    if (!val) return new Date();
 
-    // If it is a Firestore Timestamp
     if (typeof val.toDate === 'function') {
       return val.toDate();
     }
@@ -74,18 +72,15 @@ export default function HistoryScreen({ navigation }) {
       return new Date(val.toMillis());
     }
 
-    // If it is already a Date object
     if (val instanceof Date && !isNaN(val.getTime())) {
       return val;
     }
 
-    // If it is a parseable timestamp number or string
     const d = new Date(val);
     if (!isNaN(d.getTime())) {
       return d;
     }
 
-    // Handle "MMM D, YYYY" strings in Hermes
     if (typeof val === 'string') {
       const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
       const m = val.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})/);
@@ -94,12 +89,10 @@ export default function HistoryScreen({ navigation }) {
       }
     }
 
-    return new Date(); // Fallback to now
+    return new Date();
   };
 
-  // Filter logs based on urgency status selection
   const filteredLogs = useMemo(() => {
-    // Sort logs descending by timestamp first
     const sorted = [...healthLogs].sort((a, b) => {
       const timeA = parseDate(a._timestamp || a.date).getTime();
       const timeB = parseDate(b._timestamp || b.date).getTime();
@@ -125,7 +118,6 @@ export default function HistoryScreen({ navigation }) {
     });
   }, [healthLogs, activeFilter]);
 
-  // Format date grouping key: "Monday, 1 December"
   const formatGroupDate = (timestamp) => {
     const d = parseDate(timestamp);
     const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
@@ -134,7 +126,6 @@ export default function HistoryScreen({ navigation }) {
     return `${weekday}, ${day} ${month}`;
   };
 
-  // Group filtered logs into date-grouped sections
   const groupedSections = useMemo(() => {
     const groups = {};
     filteredLogs.forEach((log) => {
@@ -151,7 +142,6 @@ export default function HistoryScreen({ navigation }) {
     }));
   }, [filteredLogs]);
 
-  // Format log time: e.g. "02:30 pm"
   const formatLogTime = (timestamp) => {
     const d = parseDate(timestamp);
     let hours = d.getHours();
@@ -163,7 +153,6 @@ export default function HistoryScreen({ navigation }) {
     return `${hours}:${minutes}\n${ampm}`;
   };
 
-  // Helper to get formatting of simple date for detail modal
   const formatDetailDate = (timestamp) => {
     const d = parseDate(timestamp);
     return d.toLocaleDateString('en-US', {
@@ -177,7 +166,6 @@ export default function HistoryScreen({ navigation }) {
 
   return (
     <View style={styles.safe}>
-      {/* ── Header ────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topInset + Spacing.sm }]}>
         <View style={styles.headerInfo}>
           <Text style={styles.screenTitle}>Assessment History</Text>
@@ -187,7 +175,6 @@ export default function HistoryScreen({ navigation }) {
         </View>
       </View>
 
-      {/* ── Filters ───────────────────────────────────── */}
       <View style={styles.filterContainer}>
         <View style={styles.filterRow}>
           {['All', 'Safe', 'Mild', 'Moderate', 'Urgent'].map((filter) => {
@@ -210,7 +197,6 @@ export default function HistoryScreen({ navigation }) {
 
       <AdPopup ad={popup} />
 
-      {/* ── Timeline list ─────────────────────────────── */}
       <FlatList
         data={groupedSections}
         keyExtractor={(item) => item.date}
@@ -265,7 +251,6 @@ export default function HistoryScreen({ navigation }) {
               const scanImage = log.imageUrl || log.imageUri || getPetPhotoUri(matchedPet);
               return (
                 <View key={log.id} style={styles.timelineRow}>
-                  {/* Left part: Time + Node line */}
                   <View style={styles.leftTimeline}>
                     <View style={styles.timeColumn}>
                       <Text style={styles.timeVal}>{formatLogTime(log._timestamp || log.date).split('\n')[0]}</Text>
@@ -279,7 +264,6 @@ export default function HistoryScreen({ navigation }) {
                     </View>
                   </View>
 
-                  {/* Right part: Assessment card */}
                   <TouchableOpacity
                     style={styles.cardContainer}
                     activeOpacity={0.85}
@@ -324,7 +308,6 @@ export default function HistoryScreen({ navigation }) {
         )}
       />
 
-      {/* ── Record Details Modal ──────────────────────── */}
       {selectedScan && (
         <Modal
           visible={!!selectedScan}
@@ -376,7 +359,6 @@ export default function HistoryScreen({ navigation }) {
                 {selectedScan.description || 'No detailed observations available for this record.'}
               </Text>
 
-
               {(selectedScan.imageUrl || selectedScan.imageUri) && (
                 <View style={styles.modalImageContainer}>
                   <Text style={styles.modalSectionTitle}>Symptom Photo Scan</Text>
@@ -388,7 +370,6 @@ export default function HistoryScreen({ navigation }) {
                 </View>
               )}
 
-              {/* Ask Virtual Vet Chatbot Action Button */}
               <TouchableOpacity
                 style={styles.modalChatbotBtn}
                 activeOpacity={0.85}
@@ -402,7 +383,6 @@ export default function HistoryScreen({ navigation }) {
                       suspectedCondition: targetScan.issue,
                       analysis: targetScan.description,
                     },
-                    // Pass the health record ID so the chatbot can resume the linked session
                     scanRecordId: targetScan.id || null,
                   });
                 }}

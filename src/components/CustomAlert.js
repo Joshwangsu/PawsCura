@@ -17,13 +17,6 @@ export const useAlert = () => useContext(AlertContext);
 
 let globalShowAlert = null;
 
-/**
- * Displays a custom PawsCura-styled alert modal matching the app's design tokens.
- * Supports signature:
- *   showAlert({ title, message, type = 'info', buttons })
- * as well as Alert.alert-compatible positional arguments:
- *   showAlert(title, message, buttons, options)
- */
 export function showAlert(titleOrConfig, messageArg, buttonsArg, optionsArg) {
   let config;
   if (titleOrConfig && typeof titleOrConfig === 'object' && !Array.isArray(titleOrConfig)) {
@@ -125,7 +118,6 @@ export function AlertProvider({ children }) {
     const cb = btn?.onPress;
     setAlertState(null);
     if (typeof cb === 'function') {
-      // Execute callback cleanly after closing modal so chained alerts/navigation work cleanly
       setTimeout(() => {
         cb();
       }, 20);

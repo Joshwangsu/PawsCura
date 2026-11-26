@@ -13,12 +13,15 @@ import {
   classifyException,
   getErrorMessage,
 } from '../utils/network.js';
+import {
+  VALIDATION_STATUS,
+  computeImageFingerprint,
+  parseGeminiValidationResponse,
+  verifyRegisteredPetSpecies,
+} from '../utils/petImageValidation.js';
 
-// ── Gemini REST Configuration (Hermes-safe native fetch) ──────────────────────
 const getGeminiApiKey = () => (process.env.EXPO_PUBLIC_GEMINI_API_KEY || '').trim();
 
-// Ordered model chain: fast & available flash-lite models first (verified live HTTP 200),
-// with gemini-3-flash-preview as fallback when flash-lite hits temporary capacity.
 const MODEL_CHAIN = [
   'gemini-flash-lite-latest',
   'gemini-3.5-flash-lite',
@@ -41,10 +44,6 @@ function buildModelGenConfig(model, baseConfig) {
   return cfg;
 }
 
-/**
- * Performs a single bounded HTTP request to a Gemini generateContent endpoint
- * and maps HTTP or JSON/network failures to structured GeminiRequestError codes.
- */
 async function callGeminiRestSingle(model, contents, timeoutMs = 10000, generationConfig = null, systemInstruction = null) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -106,10 +105,6 @@ async function callGeminiRestSingle(model, contents, timeoutMs = 10000, generati
   }
 }
 
-/**
- * Checks real internet connectivity first, then executes across MODEL_CHAIN with
- * bounded retries and immediate bail-out on true offline / auth / 400 errors.
- */
 async function callGeminiWithFallback(contents, { timeoutMs = 10000, generationConfig = null, systemInstruction = null, models = MODEL_CHAIN } = {}) {
   if (!getGeminiApiKey()) {
     throw new GeminiRequestError({
@@ -140,7 +135,6 @@ async function callGeminiWithFallback(contents, { timeoutMs = 10000, generationC
     } catch (err) {
       let classified = err instanceof GeminiRequestError ? err : classifyException(err, { isOnline: true, model });
 
-      // If an exception looks like a network drop mid-request, re-probe connectivity before misreporting
       if (
         classified.code === ERROR_TYPES.SERVER_ERROR &&
         classified.httpStatus === null
@@ -170,7 +164,6 @@ async function callGeminiWithFallback(contents, { timeoutMs = 10000, generationC
 
       const hasMoreModels = i < models.length - 1 && attempts < MAX_TOTAL_ATTEMPTS;
       if (hasMoreModels) {
-        // Rate limit / 404 hops immediately to the next model; 5xx/timeout waits briefly before trying next model
         if (classified.code === ERROR_TYPES.SERVER_ERROR || classified.code === ERROR_TYPES.TIMEOUT) {
           await sleep(350);
         }
@@ -199,7 +192,6 @@ async function callGeminiWithFallback(contents, { timeoutMs = 10000, generationC
   throw lastErr || new GeminiRequestError({ code: ERROR_TYPES.UNKNOWN_ERROR });
 }
 
-// ── Chatbot (Gemini-Powered Virtual Veterinary Assistant) ─────────────────────
 const CHATBOT_MAX_HISTORY = 12;
 
 export async function chatWithVet(messageHistory = [], { scanContext = null } = {}) {
@@ -215,7 +207,6 @@ export async function chatWithVet(messageHistory = [], { scanContext = null } = 
     (m) => m && !m.isError && typeof m.text === 'string' && m.text.trim().length > 0
   );
 
-  // Preserve the earliest scan-linked context message if present, plus the most recent 12 turns for token efficiency
   let trimmedMessages = validMessages;
   if (validMessages.length > CHATBOT_MAX_HISTORY) {
     const first = validMessages[0];
@@ -225,7 +216,6 @@ export async function chatWithVet(messageHistory = [], { scanContext = null } = 
     trimmedMessages = isScanContextIntro ? [first, ...recent] : recent;
   }
 
-  // Gemini contents must start with a 'user' turn when using systemInstruction
   const formattedHistory = [];
   for (const msg of trimmedMessages) {
     const role = msg.role === 'assistant' ? 'model' : 'user';
@@ -277,7 +267,6 @@ export async function chatWithVet(messageHistory = [], { scanContext = null } = 
   });
 }
 
-// ── Visual Biometric Pet Identification ───────────────────────────────────────
 export async function visuallyIdentifyPet(base64Image, mimeType = 'image/jpeg', registeredPets = []) {
   if (!registeredPets || registeredPets.length === 0) {
     return { matchedPetId: null, matchedPetName: null, matchConfidence: 0, reasoning: 'No registered pets.' };
@@ -380,54 +369,104 @@ Return raw JSON only. Do not surround with markdown code blocks.
   }
 }
 
-// ── Pet Image Validation (Gate before Local YOLO) ────────────────────────────
+const validationCache = new Map();
+const MAX_VALIDATION_CACHE = 10;
+
+export function clearValidationCache() {
+  validationCache.clear();
+}
+
+function getCachedValidation(fingerprint) {
+  if (!fingerprint) return null;
+  return validationCache.get(fingerprint) || null;
+}
+
+function setCachedValidation(fingerprint, verdict) {
+  if (!fingerprint || !verdict || verdict.validated !== true) return;
+  if (validationCache.size >= MAX_VALIDATION_CACHE) {
+    const oldestKey = validationCache.keys().next().value;
+    if (oldestKey) validationCache.delete(oldestKey);
+  }
+  validationCache.set(fingerprint, verdict);
+}
+
 /**
- * Uses Gemini Vision (single fast call) to verify that the uploaded photo
- * actually depicts a real dog or cat before passing it to the local YOLO model.
- * If offline or Gemini is unavailable (rate limit/server error/timeout), returns
- * validated=false with the accurate errorCode so offline/on-device YOLO scans proceed.
+ * Uses Gemini Vision (single fast call) to validate whether the uploaded photo
+ * depicts a single suitable real dog or cat before running local YOLOv11m NCNN.
+ * Fails closed on network loss, timeout, quota limit, server error, or malformed JSON.
  */
-export async function validatePetImageWithGemini(base64Image, mimeType = 'image/jpeg') {
-  if (!base64Image) {
+export async function validatePetImageWithGemini(
+  base64Image,
+  mimeType = 'image/jpeg',
+  { forceRevalidate = false } = {}
+) {
+  const cleanBase64 =
+    typeof base64Image === 'string' && base64Image.includes(',')
+      ? base64Image.split(',')[1]
+      : base64Image;
+
+  if (!cleanBase64 || typeof cleanBase64 !== 'string' || cleanBase64.trim().length < 50) {
     return {
       validated: false,
+      isValid: false,
       offline: false,
       errorCode: ERROR_TYPES.API_ERROR,
-      isPet: true,
-      species: 'unknown',
-      reason: 'Image data missing — skipped remote validation.',
+      validationStatus: VALIDATION_STATUS.INVALID_IMAGE,
+      detectedSpecies: 'unknown',
+      animalVisibility: 'none',
+      animalCount: 0,
+      imageSuitability: 'unsuitable',
+      rejectionReason: 'The selected image appears empty or unreadable. Please upload a clear photo of a dog or cat.',
+      canRetry: false,
+      malformedResponse: false,
     };
+  }
+
+  const fingerprint = computeImageFingerprint(cleanBase64);
+  if (!forceRevalidate) {
+    const cached = getCachedValidation(fingerprint);
+    if (cached) return cached;
   }
 
   if (!getGeminiApiKey()) {
     return {
       validated: false,
+      isValid: false,
       offline: false,
       errorCode: ERROR_TYPES.AUTH_ERROR,
-      isPet: true,
-      species: 'unknown',
-      reason: getErrorMessage(ERROR_TYPES.AUTH_ERROR, 'validation'),
-    };
-  }
-
-  const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
-  if (!cleanBase64 || cleanBase64.length < 50) {
-    return {
-      validated: true,
-      isPet: false,
-      species: 'none',
-      reason: 'The selected image appears empty or unreadable. Please upload a clear photo of a dog or cat.',
+      validationStatus: VALIDATION_STATUS.VALIDATION_FAILED,
+      detectedSpecies: 'unknown',
+      animalVisibility: 'none',
+      animalCount: 0,
+      imageSuitability: 'unsuitable',
+      rejectionReason: getErrorMessage(ERROR_TYPES.AUTH_ERROR, 'validation'),
+      canRetry: true,
+      malformedResponse: false,
     };
   }
 
   const VALIDATION_PROMPT = `
-You are a strict image gatekeeper for PawsCura, a veterinary health scanner for dogs and cats.
-Determine whether this photo shows a REAL dog or cat (including close-up photos of a dog's or cat's skin, fur, eye, ear, mouth, paw, or body part).
-Respond isPet=false for humans/selfies/hands, other animals (birds, reptiles, rodents, livestock), inanimate objects, food, plants, landscapes, text/screenshots, cartoons/drawings, or blurry unrecognizable images.
+You are a strict image validation gatekeeper for PawsCura, a canine and feline visual inspection app.
+Inspect ONLY the visual suitability and animal species in the attached photo. Do NOT diagnose diseases or screen for health conditions.
 
-Respond ONLY with raw JSON:
-{"isPet": true, "species": "dog", "reason": "One concise user-friendly sentence."}
-(species must be "dog", "cat", or "none")
+Classify the image using these exact rules:
+1. VALID_DOG: Exactly 1 real dog (including a clear close-up of a dog's skin, fur, eye, ear, paw, or mouth) is recognizable and suitable for visual inspection (detectedSpecies="dog", animalCount=1, animalVisibility="clear" or "partial", imageSuitability="suitable", rejectionReason="").
+2. VALID_CAT: Exactly 1 real cat (including a clear close-up of a cat's skin, fur, eye, ear, paw, or mouth) is recognizable and suitable for visual inspection (detectedSpecies="cat", animalCount=1, animalVisibility="clear" or "partial", imageSuitability="suitable", rejectionReason="").
+3. MULTIPLE_ANIMALS: More than 1 dog/cat or ambiguous multiple animals are visible (animalCount>=2, imageSuitability="unsuitable").
+4. NO_ANIMAL: No real dog or cat is present (e.g., human, selfie, hand alone, bird, reptile, rodent, livestock, object, food, plant, landscape, screenshot, text, cartoon, or drawing) (detectedSpecies="none", animalCount=0, imageSuitability="unsuitable").
+5. UNCLEAR_OR_OBSTRUCTED: Animal may be present, or subject is too blurry, dark, overexposed, low-resolution, or covered/obstructed to inspect reliably (animalVisibility="obscured" or "none", imageSuitability="unsuitable").
+6. INVALID_IMAGE: Corrupted, blank, or otherwise unusable image (detectedSpecies="unknown", animalVisibility="none", imageSuitability="unsuitable").
+
+Respond ONLY with a valid JSON object matching this exact schema:
+{
+  "validationStatus": "VALID_DOG | VALID_CAT | NO_ANIMAL | UNCLEAR_OR_OBSTRUCTED | MULTIPLE_ANIMALS | INVALID_IMAGE",
+  "detectedSpecies": "dog | cat | none | unknown",
+  "animalVisibility": "clear | partial | obscured | none",
+  "animalCount": 1,
+  "imageSuitability": "suitable | unsuitable",
+  "rejectionReason": ""
+}
+Return raw JSON only. No markdown fences.
 `;
 
   const contents = [
@@ -447,7 +486,7 @@ Respond ONLY with raw JSON:
 
   const genConfig = {
     temperature: 0,
-    maxOutputTokens: 256,
+    maxOutputTokens: 320,
     responseMimeType: 'application/json',
     thinkingBudget: 0,
   };
@@ -458,103 +497,116 @@ Respond ONLY with raw JSON:
       generationConfig: genConfig,
     });
 
-    const stripped = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
-    const jsonCandidate = stripped.match(/\{[\s\S]*\}/)?.[0] || stripped;
-    const parsed = JSON.parse(jsonCandidate);
-    const isPet = parsed?.isPet === true;
-
-    return {
-      validated: true,
-      isPet,
-      species: parsed?.species || (isPet ? 'dog' : 'none'),
-      reason:
-        parsed?.reason ||
-        (isPet
-          ? 'Valid dog or cat image detected.'
-          : 'The AI identified that this picture does not show an actual dog or cat. Please upload a clear photo of a dog or cat.'),
+    const parsed = parseGeminiValidationResponse(text);
+    const result = {
+      ...parsed,
+      offline: false,
+      errorCode: parsed.malformedResponse ? ERROR_TYPES.API_ERROR : null,
     };
+
+    if (result.validated === true) {
+      setCachedValidation(fingerprint, result);
+    }
+
+    return result;
   } catch (err) {
     const classified =
       err instanceof GeminiRequestError ? err : classifyException(err, { isOnline: null });
     console.warn(`Gemini pet validation unavailable (${classified.code}):`, classified.message);
     return {
       validated: false,
+      isValid: false,
       offline: classified.code === ERROR_TYPES.NO_INTERNET,
       errorCode: classified.code,
-      isPet: true,
-      species: 'unknown',
-      reason: getErrorMessage(classified.code, 'validation'),
+      validationStatus: VALIDATION_STATUS.VALIDATION_FAILED,
+      detectedSpecies: 'unknown',
+      animalVisibility: 'none',
+      animalCount: 0,
+      imageSuitability: 'unsuitable',
+      rejectionReason: getErrorMessage(classified.code, 'validation'),
+      canRetry: true,
+      malformedResponse: false,
     };
   }
 }
 
-// ── Main Diagnostic Analysis ──────────────────────────────────────────────────
-/**
- * Validates that the image contains a real dog or cat (when reachable),
- * runs 100% on-device YOLOv11 NCNN detection & clinical assessment,
- * then generates a text-only clinical description via Gemini, reporting exact
- * error categories (No Internet vs Rate Limit vs Server/Timeout/Auth/API Error).
- */
-export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', registeredPets = [], imageUri = null) {
-  let preCheckErrorCode = null;
+export async function analyzePetCondition(
+  base64Image,
+  mimeType = 'image/jpeg',
+  registeredPets = [],
+  imageUri = null,
+  options = {}
+) {
+  const targetPet =
+    options.selectedPet ||
+    (Array.isArray(registeredPets) && registeredPets.length > 0 ? registeredPets[0] : null);
+  const yoloRunner = options.yoloRunner || runLocalYoloScan;
+  const descriptionGenerator = options.descriptionGenerator || generateTextDescriptionFromLocalFindings;
 
-  if (base64Image) {
-    const validation = await validatePetImageWithGemini(base64Image, mimeType);
-    if (validation.validated && validation.isPet === false) {
-      return {
-        status: 'invalid_image',
-        isValidPet: false,
-        validationReason:
-          validation.reason ||
-          'The uploaded image must contain a real dog or cat. Please retake or choose a clear pet photo.',
-      };
-    }
-    if (!validation.validated && validation.errorCode) {
-      preCheckErrorCode = validation.errorCode;
-    }
+  const validation = await validatePetImageWithGemini(base64Image, mimeType, {
+    forceRevalidate: Boolean(options.forceRevalidate),
+  });
+
+  const speciesCheck = verifyRegisteredPetSpecies(validation, targetPet);
+  if (!speciesCheck.matched) {
+    return {
+      status: speciesCheck.status,
+      isValidPet: false,
+      validationStatus: speciesCheck.validationStatus,
+      detectedSpecies: validation.detectedSpecies || 'unknown',
+      expectedSpecies: speciesCheck.expectedSpecies || null,
+      animalVisibility: validation.animalVisibility || 'none',
+      animalCount: validation.animalCount ?? 0,
+      imageSuitability: validation.imageSuitability || 'unsuitable',
+      validationReason: speciesCheck.reason,
+      canRetry: Boolean(speciesCheck.canRetry),
+      errorCode: validation.errorCode || null,
+      validation,
+    };
   }
 
   const petMatch = {
-    matchedPetId: registeredPets.length > 0 ? registeredPets[0].id : null,
-    matchedPetName: registeredPets.length > 0 ? registeredPets[0].name : 'the pet',
-    matchConfidence: registeredPets.length > 0 ? 94 : 0,
+    matchedPetId: targetPet ? targetPet.id : null,
+    matchedPetName: targetPet ? targetPet.name : 'your pet',
+    matchConfidence: null,
+    speciesVerified: Boolean(speciesCheck.speciesVerified),
+    validatedSpecies: speciesCheck.detectedSpecies,
   };
 
-  const targetPetName = petMatch.matchedPetName || (registeredPets[0] ? registeredPets[0].name : 'the pet');
+  const targetPetName = petMatch.matchedPetName;
+  const targetPetsList = targetPet ? [targetPet] : [];
 
-  const localYoloResult = await runLocalYoloScan(base64Image, mimeType, registeredPets, imageUri);
+  const localYoloResult = await yoloRunner(base64Image, mimeType, targetPetsList, imageUri);
 
   if (!localYoloResult) {
-    return generateOfflineHashedFallback(base64Image, petMatch, targetPetName);
-  }
-
-  // Fast skip if pre-check already established true offline, invalid auth, or exhausted rate limits (avoids duplicate failing API calls)
-  if (
-    preCheckErrorCode === ERROR_TYPES.NO_INTERNET ||
-    preCheckErrorCode === ERROR_TYPES.AUTH_ERROR ||
-    preCheckErrorCode === ERROR_TYPES.RATE_LIMIT
-  ) {
+    const offlineFallback = generateOfflineHashedFallback(base64Image, petMatch, targetPetName);
     return {
-      ...localYoloResult,
-      matchedPetId: petMatch.matchedPetId,
-      matchedPetName: targetPetName,
-      matchConfidence: petMatch.matchConfidence,
-      aiErrorCode: preCheckErrorCode,
-      analysis: getErrorMessage(preCheckErrorCode, 'scan_description'),
-      recommendedAction:
-        localYoloResult.recommendedAction ||
-        'Keep the affected area clean and dry, prevent self-trauma, and consult a veterinarian if symptoms persist.',
+      ...offlineFallback,
+      validatedSpecies: speciesCheck.detectedSpecies,
+      speciesVerified: Boolean(speciesCheck.speciesVerified),
+      validation,
     };
   }
 
-  return await generateTextDescriptionFromLocalFindings(localYoloResult, petMatch);
+  const annotatedLocal = {
+    ...localYoloResult,
+    matchedPetId: petMatch.matchedPetId,
+    matchedPetName: targetPetName,
+    matchConfidence: null,
+    validatedSpecies: speciesCheck.detectedSpecies,
+    speciesVerified: Boolean(speciesCheck.speciesVerified),
+    validation,
+  };
+
+  const finalResult = await descriptionGenerator(annotatedLocal, petMatch);
+  return {
+    ...finalResult,
+    validatedSpecies: speciesCheck.detectedSpecies,
+    speciesVerified: Boolean(speciesCheck.speciesVerified),
+    validation,
+  };
 }
 
-// ── Text-Only Clinical Description Generator (Powered by Gemini) ─────────────
-/**
- * Takes ONLY the structured findings produced by the On-Device Local YOLO AI
- * (no image data) and generates an empathetic, professional description for the pet owner.
- */
 async function generateTextDescriptionFromLocalFindings(localYoloResult, petMatch) {
   const targetPetName = petMatch.matchedPetName || localYoloResult.matchedPetName || 'the pet';
   const symptomsList =
@@ -639,7 +691,6 @@ Return raw JSON only.
   }
 }
 
-// ── Deterministic Feature-Hashed Offline Fallback ─────────────────────────────
 function generateOfflineHashedFallback(base64Image, petMatch, targetPetName) {
   let hash = 0;
   if (base64Image && typeof base64Image === 'string') {
@@ -694,8 +745,8 @@ function generateOfflineHashedFallback(base64Image, petMatch, targetPetName) {
     detections: selectedDets,
     analysis: getGeminiApiKey()
       ? `Preliminary assessment indicates suspected ${topDis.disease} based on observed symptoms (${symptomsStr}) on ${targetPetName}. ` +
-        `Recommendations: Keep the affected area clean, dry, and cool. Prevent self-trauma by using an Elizabethan collar if necessary. ` +
-        `What to avoid: Do not apply human creams, steroids, or unverified topical treatments, do not allow persistent scratching or licking, and consult a licensed veterinarian if symptoms worsen.`
+      `Recommendations: Keep the affected area clean, dry, and cool. Prevent self-trauma by using an Elizabethan collar if necessary. ` +
+      `What to avoid: Do not apply human creams, steroids, or unverified topical treatments, do not allow persistent scratching or licking, and consult a licensed veterinarian if symptoms worsen.`
       : getErrorMessage(ERROR_TYPES.AUTH_ERROR, 'scan_description'),
     recommendedAction:
       'Keep the affected area clean and dry, prevent self-trauma with an e-collar if necessary, and schedule a veterinary evaluation if symptoms persist.',

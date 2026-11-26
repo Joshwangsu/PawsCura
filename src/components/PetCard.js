@@ -29,7 +29,6 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
   const weightVal = pet.weight !== undefined && pet.weight !== '' && pet.weight !== 'Unknown' ? `${pet.weight} kg` : '—';
   const genderVal = pet.gender && pet.gender !== 'Unknown' ? pet.gender : '—';
 
-  // ── iOS Medium Widget Layout (when only 1 pet is added) ──────────────
   if (fullWidth) {
     return (
       <TouchableOpacity
@@ -40,12 +39,10 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
         onPress={onPress}
         activeOpacity={0.88}
       >
-        {/* Subtle decorative background paw watermark */}
         <View style={styles.watermarkWrap} pointerEvents="none">
           <Ionicons name="paw" size={115} color={accentColor} style={styles.watermarkIcon} />
         </View>
 
-        {/* Main Upper Row: Photo + Identity */}
         <View style={styles.widgetTopRow}>
           <View style={[styles.widgetAvatarWrap, { backgroundColor: bgColor, borderColor: Colors.border }]}>
             {photoUri ? (
@@ -82,7 +79,6 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
           </View>
         </View>
 
-        {/* Bottom 3-Column Proportioned Stat Tiles */}
         <View style={styles.widgetStatsRow}>
           <View style={styles.widgetStatPill}>
             <View style={styles.widgetStatHeader}>
@@ -122,7 +118,6 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
     );
   }
 
-  // ── Compact Horizontal List Card (when 2 or more pets are added) ────
   return (
     <TouchableOpacity
       style={[
@@ -132,7 +127,6 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
       onPress={onPress}
       activeOpacity={0.85}
     >
-      {/* Pet Photo / Fallback Icon Avatar */}
       <View style={[styles.emojiContainer, { backgroundColor: bgColor }]}>
         {photoUri ? (
           <Image source={{ uri: photoUri }} style={styles.petPhoto} resizeMode="cover" />
@@ -143,12 +137,10 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
         )}
       </View>
 
-      {/* Selected indicator dot */}
       {isSelected && (
         <View style={[styles.selectedDot, { backgroundColor: accentColor }]} />
       )}
 
-      {/* Pet Info */}
       <Text style={styles.name} numberOfLines={1}>
         {pet.name}
       </Text>
@@ -156,7 +148,6 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
         {pet.breed}
       </Text>
 
-      {/* Species chip */}
       <View style={[styles.chip, { backgroundColor: bgColor }]}>
         <Text style={[styles.chipText, { color: accentColor }]}>
           {speciesLabel}
@@ -167,7 +158,6 @@ export default function PetCard({ pet, onPress, isSelected = false, fullWidth = 
 }
 
 const styles = StyleSheet.create({
-  // ── iOS Medium Widget Styles (Single Pet) ───────────────────────────
   widgetCard: {
     width: '100%',
     backgroundColor: Colors.card,
@@ -289,7 +279,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ── Compact Multi-Pet Card Styles (2+ Pets) ─────────────────────────
   card: {
     width: 130,
     backgroundColor: Colors.card,

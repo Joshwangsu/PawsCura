@@ -1,15 +1,3 @@
-/**
- * PawsCura Local-Time Operating Hours Evaluator
- *
- * Evaluates veterinary clinic open/closed status using the device's local clock
- * and timezone (Date.getDay(), Date.getHours(), Date.getMinutes()) rather than UTC,
- * supporting:
- *  - 24/7 / 24-hour clinics
- *  - Admin structured schedules (startDay..endDay, openTime..closeTime, closedDaysList)
- *  - Optional secondary/weekend schedules (secondaryStartDay..secondaryCloseTime)
- *  - Freeform operating hours strings ("Mon - Sat (8:00 AM – 5:00 PM)", "20:00 - 02:00", etc.)
- *  - Overnight schedules that cross midnight (e.g., 8:00 PM - 2:00 AM)
- */
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -41,10 +29,6 @@ function normalizeDayIndex(dayStr) {
   return DAY_ALIASES[key] !== undefined ? DAY_ALIASES[key] : null;
 }
 
-/**
- * Parses a time string ("08:00", "8:00 AM", "5:30 PM", "17:00", "8am", "12pm")
- * into minutes since midnight (0..1439). Returns null if unparseable.
- */
 export function parseTimeToMinutes(timeStr) {
   if (!timeStr) return null;
   const s = String(timeStr).trim().toLowerCase();
@@ -90,21 +74,18 @@ function checkScheduleWindow(activeDays, openMins, closeMins, now) {
     return null;
   }
 
-  const today = now.getDay(); // Local day of week (0 = Sunday .. 6 = Saturday)
+  const today = now.getDay();
   const yesterday = (today + 6) % 7;
-  const nowMins = now.getHours() * 60 + now.getMinutes(); // Local minutes since midnight
+  const nowMins = now.getHours() * 60 + now.getMinutes();
 
-  // Same open & close time (e.g., 00:00 - 24:00 or 08:00 - 08:00) on an active day means 24h
   if (openMins === closeMins || (openMins === 0 && closeMins === 1440)) {
     return activeDays.has(today);
   }
 
   if (closeMins > openMins) {
-    // Standard daytime window
     return activeDays.has(today) && nowMins >= openMins && nowMins < closeMins;
   }
 
-  // Overnight / crosses midnight (e.g., 20:00 - 02:00)
   if (activeDays.has(today) && nowMins >= openMins) return true;
   if (activeDays.has(yesterday) && nowMins < closeMins) return true;
   return false;
@@ -120,14 +101,12 @@ function parseDaysExpression(text) {
     return days;
   }
 
-  // Extract explicit "(Closed ...)" exclusions first
   const closedSet = new Set();
   applyClosedMatches(s, null, closedSet);
   const cleaned = s.replace(/\(?\s*closed[^)]*\)?/gi, ' ');
 
   const activeDays = new Set();
 
-  // Check day ranges like "monday to friday", "mon - sat", "fri-sun"
   const rangeRe = /\b(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:rs?(?:day)?)?|fri(?:day)?|sat(?:urday)?)\s*(?:to|-|–|—|thru|through)\s*(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:rs?(?:day)?)?|fri(?:day)?|sat(?:urday)?)\b/gi;
   let match;
   while ((match = rangeRe.exec(cleaned)) !== null) {
@@ -139,7 +118,6 @@ function parseDaysExpression(text) {
     }
   }
 
-  // Also capture standalone day names (e.g. "Saturday", "Mon, Wed, Fri")
   const singleRe = /\b(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:rs?(?:day)?)?|fri(?:day)?|sat(?:urday)?)\b/gi;
   while ((match = singleRe.exec(cleaned)) !== null) {
     const idx = normalizeDayIndex(match[1]);
@@ -191,7 +169,6 @@ function evaluateSegmentString(segment, defaultDays, now) {
   const closeMins = parseTimeToMinutes(timeRangeMatch[2]);
   if (openMins === null || closeMins === null) return null;
 
-  // Determine which days apply to this segment
   const beforeTime = s.slice(0, timeRangeMatch.index).trim();
   const hasExplicitDays = /\b(sun|mon|tue|wed|thu|fri|sat|every\s*day|daily)/i.test(s);
   const daysSet = hasExplicitDays
@@ -201,17 +178,9 @@ function evaluateSegmentString(segment, defaultDays, now) {
   return checkScheduleWindow(daysSet, openMins, closeMins, now);
 }
 
-/**
- * Evaluates whether a clinic is open RIGHT NOW according to the phone's local timezone.
- *
- * @param {object} clinicData - Raw Firestore or formatted clinic object
- * @param {Date} [now=new Date()] - Current local Date (overrideable for unit tests)
- * @returns {boolean}
- */
 export function isClinicOpenNow(clinicData = {}, now = new Date()) {
   if (!clinicData || typeof clinicData !== 'object') return false;
 
-  // 1. Structured Admin Portal fields (highest precision)
   if (clinicData.startDay && (clinicData.openTime || clinicData.closeTime)) {
     const closedSet = new Set(
       (Array.isArray(clinicData.closedDaysList) ? clinicData.closedDaysList : [])
@@ -247,7 +216,6 @@ export function isClinicOpenNow(clinicData = {}, now = new Date()) {
     if (primaryRes !== null || secondaryRes !== null) return false;
   }
 
-  // 2. Freeform hours / operatingHours / openDays strings
   const hoursRaw = String(
     clinicData.hours || clinicData.openingHours || clinicData.operatingHours || ''
   ).trim();
@@ -255,7 +223,6 @@ export function isClinicOpenNow(clinicData = {}, now = new Date()) {
   const defaultDays = openDaysRaw ? parseDaysExpression(openDaysRaw) : new Set([0, 1, 2, 3, 4, 5, 6]);
 
   if (hoursRaw) {
-    // Mask parenthesized expressions like "(Closed Sun, Wed)" while splitting multi-schedule strings
     const parens = [];
     const masked = hoursRaw.replace(/\([^)]*\)/g, (m) => {
       parens.push(m);
@@ -277,7 +244,6 @@ export function isClinicOpenNow(clinicData = {}, now = new Date()) {
     if (sawParseable) return false;
   }
 
-  // 3. Schedule array ([{ days, hours }])
   if (Array.isArray(clinicData.schedule) && clinicData.schedule.length > 0) {
     let sawParseable = false;
     for (const entry of clinicData.schedule) {
@@ -289,6 +255,5 @@ export function isClinicOpenNow(clinicData = {}, now = new Date()) {
     if (sawParseable) return false;
   }
 
-  // 4. Never assume missing or malformed schedules are open
   return false;
 }

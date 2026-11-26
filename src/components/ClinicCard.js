@@ -14,7 +14,6 @@ export default function ClinicCard({ clinic, onNavigate, onPressDetails }) {
       onPress={() => onPressDetails && onPressDetails(clinic)}
     >
       <View style={styles.content}>
-        {/* Header row */}
         <View style={styles.headerRow}>
           <View style={styles.iconBox}>
             <Text style={styles.clinicEmoji}>{clinic.emoji || '🏥'}</Text>
@@ -30,15 +29,12 @@ export default function ClinicCard({ clinic, onNavigate, onPressDetails }) {
             </Text>
           </View>
 
-          {/* Distance badge */}
           <View style={styles.distanceBadge}>
             <Text style={styles.distanceText}>{clinic.distance}</Text>
           </View>
         </View>
 
-        {/* Meta row */}
         <View style={styles.metaRow}>
-          {/* Rating */}
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={13} color={Colors.warning} />
             <Text style={styles.ratingText}>
@@ -46,11 +42,9 @@ export default function ClinicCard({ clinic, onNavigate, onPressDetails }) {
             </Text>
           </View>
 
-          {/* Status badge */}
           <StatusBadge status={clinic.isOpen ? 'Open' : 'Closed'} size="sm" />
         </View>
 
-        {/* Hours & Action Buttons */}
         <View style={styles.footerRow}>
           <Text style={styles.hours} numberOfLines={1}>
             <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
@@ -58,7 +52,6 @@ export default function ClinicCard({ clinic, onNavigate, onPressDetails }) {
           </Text>
         </View>
 
-        {/* Action buttons */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.detailsBtn}
