@@ -61,14 +61,39 @@ const EMPTY_FORM = {
   notes: '',
 };
 
+const BIRTHDAY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const CURRENT_YEAR = new Date().getFullYear();
+const BIRTHDAY_YEARS = Array.from({ length: 36 }, (_, i) => CURRENT_YEAR - i);
+
+function getDaysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
 function AddPetModal({ onClose, onAdd }) {
   const insets = useSafeAreaInsets();
   const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
+  const now = new Date();
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
   const [photos, setPhotos] = useState([]);
   const [step, setStep] = useState(1);
+  const [showBirthdayPicker, setShowBirthdayPicker] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(now.getMonth());
+  const [pickerDay, setPickerDay] = useState(now.getDate());
+  const [pickerYear, setPickerYear] = useState(now.getFullYear());
+
+  const maxPickerDay = getDaysInMonth(pickerYear, pickerMonth);
+  const effectivePickerDay = Math.min(pickerDay, maxPickerDay);
+  const dayOptions = Array.from({ length: maxPickerDay }, (_, i) => i + 1);
+
+  const resetBirthdayPicker = () => {
+    const today = new Date();
+    setShowBirthdayPicker(false);
+    setPickerMonth(today.getMonth());
+    setPickerDay(today.getDate());
+    setPickerYear(today.getFullYear());
+  };
 
   const updateField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -154,6 +179,10 @@ function AddPetModal({ onClose, onAdd }) {
       showAlert('Missing Required Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
+    if (!photos.some((p) => p.angle === 'front' && p.uri)) {
+      showAlert('Front Face Photo Required', 'Please upload a Front Face photo of your pet before saving.');
+      return;
+    }
     if (form.age && (isNaN(parseFloat(form.age)) || parseFloat(form.age) < 0 || parseFloat(form.age) > 50)) {
       showAlert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
       return;
@@ -188,6 +217,7 @@ function AddPetModal({ onClose, onAdd }) {
     setSelectedColor(0);
     setPhotos([]);
     setStep(1);
+    resetBirthdayPicker();
     onClose();
   };
 
@@ -197,6 +227,7 @@ function AddPetModal({ onClose, onAdd }) {
     setSelectedColor(0);
     setPhotos([]);
     setStep(1);
+    resetBirthdayPicker();
     onClose();
   };
 
@@ -316,6 +347,9 @@ function AddPetModal({ onClose, onAdd }) {
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={styles.photoSlotTitle}>{angle.title}</Text>
+                          {angle.id === 'front' && (
+                            <Text style={styles.requiredTag}>Required</Text>
+                          )}
                         </View>
                         <Text style={styles.photoSlotDesc}>{angle.desc}</Text>
                       </View>
@@ -402,13 +436,180 @@ function AddPetModal({ onClose, onAdd }) {
               </View>
 
               <Text style={styles.fieldLabel}>Birthday</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="e.g. Jan 15, 2022"
-                placeholderTextColor={Colors.textSecondary}
-                value={form.birthday}
-                onChangeText={(v) => updateField('birthday', v)}
-              />
+              <TouchableOpacity
+                style={styles.birthdaySelectBtn}
+                activeOpacity={0.8}
+                onPress={() => setShowBirthdayPicker(true)}
+              >
+                <View style={styles.birthdaySelectLeft}>
+                  <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+                  <Text
+                    style={[
+                      styles.birthdaySelectText,
+                      !form.birthday && styles.birthdayPlaceholderText,
+                    ]}
+                  >
+                    {form.birthday || 'Select Month, Day, Year'}
+                  </Text>
+                </View>
+                <View style={styles.birthdaySelectRight}>
+                  {Boolean(form.birthday) && (
+                    <TouchableOpacity
+                      onPress={() => updateField('birthday', '')}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                  <Ionicons name="chevron-down" size={18} color={Colors.textSecondary} />
+                </View>
+              </TouchableOpacity>
+
+              <Modal
+                visible={showBirthdayPicker}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowBirthdayPicker(false)}
+              >
+                <View style={styles.birthdayModalOverlay}>
+                  <View
+                    style={[
+                      styles.birthdayModalSheet,
+                      { paddingBottom: Math.max(insets.bottom + 12, 20) },
+                    ]}
+                  >
+                    <View style={styles.birthdayModalHeader}>
+                      <TouchableOpacity onPress={() => setShowBirthdayPicker(false)}>
+                        <Text style={styles.birthdayCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.birthdayModalTitle}>Select Birthday</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const today = new Date();
+                          const chosen = new Date(pickerYear, pickerMonth, effectivePickerDay);
+                          if (chosen > today) {
+                            showAlert('Invalid Birthday', 'Birthday cannot be in the future.');
+                            return;
+                          }
+                          updateField(
+                            'birthday',
+                            `${BIRTHDAY_MONTHS[pickerMonth]} ${effectivePickerDay}, ${pickerYear}`
+                          );
+                          setShowBirthdayPicker(false);
+                        }}
+                      >
+                        <Text style={styles.birthdayDoneText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.birthdayColumnsRow}>
+                      <View style={styles.birthdayColumnWrap}>
+                        <Text style={styles.birthdayColumnHeader}>Month</Text>
+                        <ScrollView
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={false}
+                          style={styles.birthdayColumnScroll}
+                        >
+                          {BIRTHDAY_MONTHS.map((mLabel, mIdx) => {
+                            const active = pickerMonth === mIdx;
+                            return (
+                              <TouchableOpacity
+                                key={mLabel}
+                                style={[
+                                  styles.birthdayOptionItem,
+                                  active && styles.birthdayOptionItemActive,
+                                ]}
+                                onPress={() => {
+                                  setPickerMonth(mIdx);
+                                  const maxD = getDaysInMonth(pickerYear, mIdx);
+                                  if (pickerDay > maxD) setPickerDay(maxD);
+                                }}
+                              >
+                                <Text
+                                  style={[
+                                    styles.birthdayOptionText,
+                                    active && styles.birthdayOptionTextActive,
+                                  ]}
+                                >
+                                  {mLabel}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+
+                      <View style={styles.birthdayColumnWrap}>
+                        <Text style={styles.birthdayColumnHeader}>Day</Text>
+                        <ScrollView
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={false}
+                          style={styles.birthdayColumnScroll}
+                        >
+                          {dayOptions.map((dVal) => {
+                            const active = effectivePickerDay === dVal;
+                            return (
+                              <TouchableOpacity
+                                key={dVal}
+                                style={[
+                                  styles.birthdayOptionItem,
+                                  active && styles.birthdayOptionItemActive,
+                                ]}
+                                onPress={() => setPickerDay(dVal)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.birthdayOptionText,
+                                    active && styles.birthdayOptionTextActive,
+                                  ]}
+                                >
+                                  {dVal}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+
+                      <View style={styles.birthdayColumnWrap}>
+                        <Text style={styles.birthdayColumnHeader}>Year</Text>
+                        <ScrollView
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={false}
+                          style={styles.birthdayColumnScroll}
+                        >
+                          {BIRTHDAY_YEARS.map((yVal) => {
+                            const active = pickerYear === yVal;
+                            return (
+                              <TouchableOpacity
+                                key={yVal}
+                                style={[
+                                  styles.birthdayOptionItem,
+                                  active && styles.birthdayOptionItemActive,
+                                ]}
+                                onPress={() => {
+                                  setPickerYear(yVal);
+                                  const maxD = getDaysInMonth(yVal, pickerMonth);
+                                  if (pickerDay > maxD) setPickerDay(maxD);
+                                }}
+                              >
+                                <Text
+                                  style={[
+                                    styles.birthdayOptionText,
+                                    active && styles.birthdayOptionTextActive,
+                                  ]}
+                                >
+                                  {yVal}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
 
               <Text style={styles.fieldLabel}>Medical Notes / Allergies</Text>
               <TextInput
@@ -440,6 +641,14 @@ function AddPetModal({ onClose, onAdd }) {
                 }
                 setStep(2);
               } else if (step === 2) {
+                const hasFrontPhoto = photos.some((p) => p.angle === 'front' && p.uri);
+                if (!hasFrontPhoto) {
+                  showAlert(
+                    'Front Face Photo Required',
+                    'Please upload a Front Face photo of your pet before continuing.'
+                  );
+                  return;
+                }
                 setStep(3);
               } else {
                 handleSubmit();
@@ -1681,6 +1890,110 @@ const styles = StyleSheet.create({
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+  },
+  birthdaySelectBtn: {
+    backgroundColor: Colors.background,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  birthdaySelectLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  birthdaySelectText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+  },
+  birthdayPlaceholderText: {
+    color: Colors.textSecondary,
+  },
+  birthdaySelectRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  birthdayModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  birthdayModalSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  birthdayModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  birthdayModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  birthdayCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  birthdayDoneText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  birthdayColumnsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  birthdayColumnWrap: {
+    flex: 1,
+  },
+  birthdayColumnHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  birthdayColumnScroll: {
+    height: 210,
+    backgroundColor: Colors.background,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  birthdayOptionItem: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  birthdayOptionItemActive: {
+    backgroundColor: Colors.primary,
+  },
+  birthdayOptionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  birthdayOptionTextActive: {
+    color: '#fff',
+    fontWeight: '800',
   },
   speciesGrid: {
     flexDirection: 'row',
