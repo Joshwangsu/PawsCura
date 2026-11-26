@@ -1,7 +1,7 @@
-const { withGradleProperties } = require('expo/config-plugins');
+const { withGradleProperties, withAppBuildGradle } = require('expo/config-plugins');
 
 module.exports = function withDisableMinify(config) {
-  return withGradleProperties(config, (config) => {
+  config = withGradleProperties(config, (config) => {
     const props = config.modResults;
     const setProp = (key, value) => {
       const existing = props.find((item) => item.type === 'property' && item.key === key);
@@ -19,5 +19,22 @@ module.exports = function withDisableMinify(config) {
 
     return config;
   });
-};
 
+  // Store NCNN .bin and .param model assets uncompressed in the APK so AAssetManager
+  // memory-maps them directly instead of decompressing 40MB into heap RAM (prevents OOM).
+  config = withAppBuildGradle(config, (config) => {
+    if (config.modResults.language === 'groovy') {
+      let contents = config.modResults.contents;
+      if (!contents.includes('noCompress') || !contents.includes('"bin"')) {
+        contents = contents.replace(
+          /android\s*\{/,
+          `android {\n    androidResources {\n        noCompress += ["bin", "param"]\n    }`
+        );
+        config.modResults.contents = contents;
+      }
+    }
+    return config;
+  });
+
+  return config;
+};

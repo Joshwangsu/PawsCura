@@ -14,6 +14,11 @@ add_library(yolo11_ncnn SHARED
     src/main/cpp/yolo11_ncnn.cpp
 )
 
+# Ensure 16KB ELF page alignment for Android 15/16 devices
+target_link_options(yolo11_ncnn PRIVATE
+    "-Wl,-z,max-page-size=16384"
+)
+
 target_link_libraries(yolo11_ncnn
     ncnn
     android

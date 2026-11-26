@@ -268,15 +268,23 @@ export default function ScanScreen() {
       body.append('upload_preset', uploadPreset);
       body.append('cloud_name', cloudName);
 
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-        {
-          method: 'POST',
-          body,
-          // Do NOT set Content-Type — let fetch set it with the correct boundary
-          headers: { Accept: 'application/json' },
-        }
-      );
+      const controller = new AbortController();
+      const uploadTimer = setTimeout(() => controller.abort(), 12000);
+      let response;
+      try {
+        response = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          {
+            method: 'POST',
+            body,
+            // Do NOT set Content-Type — let fetch set it with the correct boundary
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+          }
+        );
+      } finally {
+        clearTimeout(uploadTimer);
+      }
 
       if (!response.ok) {
         const errText = await response.text();
@@ -356,7 +364,7 @@ export default function ScanScreen() {
           const remaining = SCAN_MIN_SECONDS * 1000 - (Date.now() - startedAt);
           if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
           setResult(analysisResult);
-          incrementScanCount();
+          Promise.resolve(incrementScanCount()).catch((e) => console.warn('Scan count update skipped:', e?.message));
 
           // Auto-record to pet's medical history immediately after scan
           // Priority: AI-matched pet ID > first pet in list
@@ -436,6 +444,8 @@ export default function ScanScreen() {
     } catch (err) {
       console.error('Auto-save error:', err);
       setAutoSaveStatus('error');
+    } finally {
+      setImageBase64(null);
     }
   };
 

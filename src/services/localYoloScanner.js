@@ -584,7 +584,7 @@ export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', reg
       detections = ncnnDets;
     }
   } catch (e) {
-    // Native module not loaded in pure web or test runners
+    console.warn('[YoloNcnn] detectWithNcnn error:', e?.message || e);
   }
 
   if (!detections) {

@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import {
   runLocalYoloScan,
   BEST_PT_CLASSES,
@@ -7,34 +6,58 @@ import {
   predictClinicalDiseases,
 } from './localYoloScanner.js';
 
-// ── Gemini Client Configuration ───────────────────────────────────────────────
-// Uses the @google/genai SDK with the environment variable API key.
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
-
-let ai = null;
-try {
-  if (GEMINI_API_KEY) {
-    ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  }
-} catch (err) {
-  console.warn('Failed to initialize GoogleGenAI client:', err);
-}
+// ── Gemini REST Configuration (Hermes-safe native fetch) ──────────────────────
+const getGeminiApiKey = () => process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 
 // Model names — gemini-3-flash-preview is primary (verified fast & available), gemini-3.5-flash is fallback
 const PRIMARY_MODEL = 'gemini-3-flash-preview';
 const FALLBACK_MODEL = 'gemini-3.5-flash';
+const OFFLINE_DESCRIPTION =
+  'No internet connection. Detailed AI clinical description is unavailable offline. Connect to the internet to generate a comprehensive AI care description.';
 
-function withTimeout(promise, ms = 8000) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini request timed out')), ms)),
-  ]);
+/**
+ * Invokes the Gemini generateContent REST API using React Native's built-in fetch
+ * and AbortController so it never depends on browser globals (ReadableStream,
+ * structuredClone, AbortSignal.timeout) missing from Hermes.
+ */
+async function callGeminiRest(model, contents, timeoutMs = 8000) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API key not configured');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ contents }),
+      signal: controller.signal,
+    });
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const msg = json?.error?.message || `Gemini HTTP ${response.status}`;
+      throw new Error(msg);
+    }
+
+    const parts = json?.candidates?.[0]?.content?.parts || [];
+    return parts.map((p) => p?.text || '').join('').trim();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ── Chatbot ───────────────────────────────────────────────────────────────────
 export async function chatWithVet(messageHistory) {
-  if (!ai) {
-    const { chatWithVet: localChatWithVet } = await import('./aiService');
+  if (!getGeminiApiKey()) {
+    const { chatWithVet: localChatWithVet } = await import('./aiService.js');
     return await localChatWithVet(messageHistory);
   }
 
@@ -44,76 +67,54 @@ export async function chatWithVet(messageHistory) {
       parts: [{ text: msg.text }],
     }));
 
-    const lastMessage = messageHistory[messageHistory.length - 1].text;
-
-    let result;
-    try {
-      const chat = ai.chats.create({
-        model: PRIMARY_MODEL,
-        history: [
+    const lastMessage = messageHistory[messageHistory.length - 1]?.text || '';
+    const contents = [
+      {
+        role: 'user',
+        parts: [
           {
-            role: 'user',
-            parts: [
-              {
-                text:
-                  'You are a friendly, highly experienced Virtual Veterinary Assistant for PawsCura. ' +
-                  'Provide concise, empathetic, and clinically sound advice about pet health, behavior, and care. ' +
-                  'Always clarify you are an AI and not a substitute for a licensed veterinarian.',
-              },
-            ],
+            text:
+              'You are a friendly, highly experienced Virtual Veterinary Assistant for PawsCura. ' +
+              'Provide concise, empathetic, and clinically sound advice about pet health, behavior, and care. ' +
+              'Always clarify you are an AI and not a substitute for a licensed veterinarian.',
           },
-          {
-            role: 'model',
-            parts: [{ text: 'Understood. I am your PawsCura Virtual Veterinary Assistant.' }],
-          },
-          ...formattedHistory,
         ],
-      });
-      result = await chat.sendMessage({ message: lastMessage });
+      },
+      {
+        role: 'model',
+        parts: [{ text: 'Understood. I am your PawsCura Virtual Veterinary Assistant.' }],
+      },
+      ...formattedHistory,
+      {
+        role: 'user',
+        parts: [{ text: lastMessage }],
+      },
+    ];
+
+    try {
+      const text = await callGeminiRest(PRIMARY_MODEL, contents, 10000);
+      if (text) return text;
     } catch (primaryErr) {
       console.warn(`Primary chat model ${PRIMARY_MODEL} failed, attempting fallback:`, primaryErr.message);
-      const chatFallback = ai.chats.create({
-        model: FALLBACK_MODEL,
-        history: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text:
-                  'You are a friendly, highly experienced Virtual Veterinary Assistant for PawsCura. ' +
-                  'Provide concise, empathetic, and clinically sound advice about pet health, behavior, and care.',
-              },
-            ],
-          },
-          {
-            role: 'model',
-            parts: [{ text: 'Understood. I am your PawsCura Virtual Veterinary Assistant.' }],
-          },
-          ...formattedHistory,
-        ],
-      });
-      result = await chatFallback.sendMessage({ message: lastMessage });
+      const fallbackText = await callGeminiRest(FALLBACK_MODEL, contents, 8000);
+      if (fallbackText) return fallbackText;
     }
 
-    return result.text;
+    const { chatWithVet: localChatWithVet } = await import('./aiService.js');
+    return await localChatWithVet(messageHistory);
   } catch (error) {
-    console.error('Gemini Chat Error:', error);
-    const { chatWithVet: localChatWithVet } = await import('./aiService');
+    console.warn('Gemini Chat fallback to local assistant:', error.message);
+    const { chatWithVet: localChatWithVet } = await import('./aiService.js');
     return await localChatWithVet(messageHistory);
   }
 }
 
 // ── Visual Biometric Pet Identification ───────────────────────────────────────
-/**
- * Uses Gemini Multimodal Vision to visually compare the scanned animal against
- * the user's registered pet profiles & multi-angle reference photos.
- */
 export async function visuallyIdentifyPet(base64Image, mimeType = 'image/jpeg', registeredPets = []) {
   if (!registeredPets || registeredPets.length === 0) {
     return { matchedPetId: null, matchedPetName: null, matchConfidence: 0, reasoning: 'No registered pets.' };
   }
 
-  // If only 1 pet is registered, auto-match immediately
   if (registeredPets.length === 1) {
     return {
       matchedPetId: registeredPets[0].id,
@@ -123,7 +124,7 @@ export async function visuallyIdentifyPet(base64Image, mimeType = 'image/jpeg', 
     };
   }
 
-  if (!ai) {
+  if (!getGeminiApiKey()) {
     return {
       matchedPetId: registeredPets[0].id,
       matchedPetName: registeredPets[0].name,
@@ -159,7 +160,7 @@ Return raw JSON only. Do not surround with markdown code blocks.
 `;
 
   try {
-    const contents = [
+    const parts = [
       { text: IDENTIFY_PROMPT },
       {
         inlineData: {
@@ -169,12 +170,11 @@ Return raw JSON only. Do not surround with markdown code blocks.
       },
     ];
 
-    // Attach reference photos of candidate pets if available
     registeredPets.forEach((pet) => {
       if (Array.isArray(pet.referencePhotos)) {
         pet.referencePhotos.forEach((photo) => {
           if (photo && photo.base64) {
-            contents.push({
+            parts.push({
               inlineData: {
                 data: photo.base64,
                 mimeType: photo.mimeType || 'image/jpeg',
@@ -185,21 +185,15 @@ Return raw JSON only. Do not surround with markdown code blocks.
       }
     });
 
-    let response;
+    const contents = [{ role: 'user', parts }];
+    let text;
     try {
-      response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
-        contents,
-      });
+      text = await callGeminiRest(PRIMARY_MODEL, contents, 8000);
     } catch (err) {
-      response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
-        contents,
-      });
+      text = await callGeminiRest(FALLBACK_MODEL, contents, 6000);
     }
 
-    const text = response.text || '';
-    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const cleanJson = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
 
     return {
@@ -221,12 +215,8 @@ Return raw JSON only. Do not surround with markdown code blocks.
 
 // ── Main Diagnostic Analysis ──────────────────────────────────────────────────
 /**
- * Analyzes a pet photo dynamically:
- *  1. Visually identifies which registered pet is in the photo
- *  2. If Local YOLO Server (PC/LAN) responds, uses its structured detections.
- *  3. If on Mobile APK (Local Server unreachable), runs Gemini 3.5 Flash Vision directly
- *     evaluating against our 18 YOLO symptom classes & 26 disease profiles.
- *  4. Formats description with Observations, Practical Recommendations, and What to Avoid.
+ * Runs 100% on-device YOLOv11 NCNN detection & clinical assessment first,
+ * then optionally uses Gemini (text-only) to generate an owner-friendly description.
  */
 export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', registeredPets = [], imageUri = null) {
   // Step 1: Resolve target pet locally (no image sent to Gemini)
@@ -245,8 +235,8 @@ export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', 
     return generateOfflineHashedFallback(base64Image, petMatch, targetPetName);
   }
 
-  // Step 3: If Gemini API is available and online, generate text description strictly from local findings
-  if (ai) {
+  // Step 3: If Gemini API key is available and online, generate text description strictly from local findings
+  if (getGeminiApiKey()) {
     try {
       return await generateTextDescriptionFromLocalFindings(localYoloResult, petMatch, registeredPets);
     } catch (geminiErr) {
@@ -261,8 +251,10 @@ export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', 
     matchedPetId: petMatch.matchedPetId,
     matchedPetName: targetPetName,
     matchConfidence: petMatch.matchConfidence,
-    analysis: 'No internet connection. Detailed AI clinical description is unavailable offline. Connect to the internet to generate a comprehensive AI care description.',
-    recommendedAction: localYoloResult.recommendedAction || 'Keep the affected area clean and dry, prevent self-trauma, and consult a veterinarian if symptoms persist.',
+    analysis: OFFLINE_DESCRIPTION,
+    recommendedAction:
+      localYoloResult.recommendedAction ||
+      'Keep the affected area clean and dry, prevent self-trauma, and consult a veterinarian if symptoms persist.',
   };
 }
 
@@ -273,14 +265,14 @@ export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', 
  */
 async function generateTextDescriptionFromLocalFindings(localYoloResult, petMatch, registeredPets) {
   const targetPetName = petMatch.matchedPetName || localYoloResult.matchedPetName || 'the pet';
-  const symptomsList = (localYoloResult.detectedSymptoms || [])
-    .map((s) => (typeof s === 'string' ? s : s.class_name))
-    .filter(Boolean)
-    .join(', ') || 'None reported';
+  const symptomsList =
+    (localYoloResult.detectedSymptoms || [])
+      .map((s) => (typeof s === 'string' ? s : s.class_name))
+      .filter(Boolean)
+      .join(', ') || 'None reported';
 
-  const alternativesList = (localYoloResult.alternatives || [])
-    .map((a) => `${a.condition} (${a.confidence}%)`)
-    .join(', ') || 'None';
+  const alternativesList =
+    (localYoloResult.alternatives || []).map((a) => `${a.condition} (${a.confidence}%)`).join(', ') || 'None';
 
   const DYNAMIC_PROMPT = `
 You are a Veterinary AI Assistant for PawsCura.
@@ -308,26 +300,15 @@ Return raw JSON only.
 `;
 
   try {
-    let response;
+    const contents = [{ role: 'user', parts: [{ text: DYNAMIC_PROMPT }] }];
+    let text;
     try {
-      response = await withTimeout(
-        ai.models.generateContent({
-          model: PRIMARY_MODEL,
-          contents: [{ text: DYNAMIC_PROMPT }],
-        }),
-        8000
-      );
+      text = await callGeminiRest(PRIMARY_MODEL, contents, 8000);
     } catch (e) {
-      response = await withTimeout(
-        ai.models.generateContent({
-          model: FALLBACK_MODEL,
-          contents: [{ text: DYNAMIC_PROMPT }],
-        }),
-        6000
-      );
+      text = await callGeminiRest(FALLBACK_MODEL, contents, 6000);
     }
 
-    const cleanJson = (response.text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+    const cleanJson = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
 
     return {
@@ -335,8 +316,13 @@ Return raw JSON only.
       matchedPetId: petMatch.matchedPetId || localYoloResult.matchedPetId,
       matchedPetName: targetPetName,
       matchConfidence: petMatch.matchConfidence || localYoloResult.matchConfidence,
-      analysis: parsed.analysis || `Preliminary assessment indicates suspected ${localYoloResult.suspectedCondition} based on detected symptoms (${symptomsList}) on ${targetPetName}. Recommendations: Keep clean and dry, avoid human topical medications, and prevent scratching.`,
-      recommendedAction: parsed.recommendedAction || localYoloResult.recommendedAction || 'Keep the area clean, prevent scratching, and schedule a veterinary evaluation if symptoms persist.',
+      analysis:
+        parsed.analysis ||
+        `Preliminary assessment indicates suspected ${localYoloResult.suspectedCondition} based on detected symptoms (${symptomsList}) on ${targetPetName}. Recommendations: Keep clean and dry, avoid human topical medications, and prevent scratching.`,
+      recommendedAction:
+        parsed.recommendedAction ||
+        localYoloResult.recommendedAction ||
+        'Keep the area clean, prevent scratching, and schedule a veterinary evaluation if symptoms persist.',
     };
   } catch (err) {
     console.warn('Gemini text generation failed (device likely offline):', err.message);
@@ -345,15 +331,16 @@ Return raw JSON only.
       matchedPetId: petMatch.matchedPetId || localYoloResult.matchedPetId,
       matchedPetName: targetPetName,
       matchConfidence: petMatch.matchConfidence || localYoloResult.matchConfidence,
-      analysis: 'No internet connection. Detailed AI clinical description is unavailable offline. Connect to the internet to generate a comprehensive AI care description.',
-      recommendedAction: localYoloResult.recommendedAction || 'Keep the affected area clean and dry, prevent self-trauma, and monitor closely.',
+      analysis: OFFLINE_DESCRIPTION,
+      recommendedAction:
+        localYoloResult.recommendedAction ||
+        'Keep the affected area clean and dry, prevent self-trauma, and monitor closely.',
     };
   }
 }
 
 // ── Deterministic Feature-Hashed Offline Fallback ─────────────────────────────
 function generateOfflineHashedFallback(base64Image, petMatch, targetPetName) {
-  // Use a pseudo-random hash derived from the base64 payload so distinct images don't produce duplicates
   let hash = 0;
   if (base64Image && typeof base64Image === 'string') {
     const sampleLen = Math.min(base64Image.length, 500);
@@ -405,10 +392,11 @@ function generateOfflineHashedFallback(base64Image, petMatch, targetPetName) {
     severityScore: sev.score,
     detectedSymptoms: selectedDets.map((d) => `${d.class_name} (${Math.round(d.conf * 100)}%)`),
     detections: selectedDets,
-    analysis:
-      `Preliminary assessment indicates suspected ${topDis.disease} based on observed symptoms (${symptomsStr}) on ${targetPetName}. ` +
-      `Recommendations: Keep the affected area clean, dry, and cool. Prevent self-trauma by using an Elizabethan collar if necessary. ` +
-      `What to avoid: Do not apply human creams, steroids, or unverified topical treatments, do not allow persistent scratching or licking, and consult a licensed veterinarian if symptoms worsen.`,
+    analysis: getGeminiApiKey()
+      ? `Preliminary assessment indicates suspected ${topDis.disease} based on observed symptoms (${symptomsStr}) on ${targetPetName}. ` +
+        `Recommendations: Keep the affected area clean, dry, and cool. Prevent self-trauma by using an Elizabethan collar if necessary. ` +
+        `What to avoid: Do not apply human creams, steroids, or unverified topical treatments, do not allow persistent scratching or licking, and consult a licensed veterinarian if symptoms worsen.`
+      : OFFLINE_DESCRIPTION,
     recommendedAction:
       'Keep the affected area clean and dry, prevent self-trauma with an e-collar if necessary, and schedule a veterinary evaluation if symptoms persist.',
   };

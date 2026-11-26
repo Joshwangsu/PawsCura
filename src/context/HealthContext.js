@@ -31,6 +31,8 @@ export const HealthProvider = ({ children }) => {
         return timeB - timeA; // Descending
       });
       setPets(petsData);
+    }, (err) => {
+      console.warn('Pets snapshot error:', err?.message);
     });
 
     // Subscribe to Health Records for the current user
@@ -59,6 +61,8 @@ export const HealthProvider = ({ children }) => {
         return timeB - timeA; // Descending
       });
       setHealthLogs(logsData);
+    }, (err) => {
+      console.warn('HealthLogs snapshot error:', err?.message);
     });
 
     return () => {

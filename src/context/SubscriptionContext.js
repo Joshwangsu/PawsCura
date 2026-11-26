@@ -75,7 +75,7 @@ export const SubscriptionProvider = ({ children }) => {
           setDoc(userDocRef, { 
             scanUsageCount: 0, 
             scanUsageDate: todayStr 
-          }, { merge: true });
+          }, { merge: true }).catch(err => console.warn('Reset scan count warning:', err?.message));
           setScanUsage({ count: 0, date: todayStr });
         } else {
           setScanUsage({ 
@@ -98,8 +98,11 @@ export const SubscriptionProvider = ({ children }) => {
           isPremium: isTestEmail ? true : false,
           scanUsageCount: 0,
           scanUsageDate: todayStr
-        });
+        }).catch(err => console.warn('Init user profile warning:', err?.message));
       }
+      setLoading(false);
+    }, (err) => {
+      console.warn('User subscription snapshot error:', err?.message);
       setLoading(false);
     });
 
@@ -108,13 +111,17 @@ export const SubscriptionProvider = ({ children }) => {
 
   const incrementScanCount = async () => {
     if (!user || isPremium) return;
-    const userDocRef = doc(db, 'users', user.uid);
-    const newCount = scanUsage.count + 1;
-    const todayStr = new Date().toISOString().split('T')[0];
-    await setDoc(userDocRef, { 
-      scanUsageCount: newCount,
-      scanUsageDate: todayStr 
-    }, { merge: true });
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const newCount = scanUsage.count + 1;
+      const todayStr = new Date().toISOString().split('T')[0];
+      await setDoc(userDocRef, { 
+        scanUsageCount: newCount,
+        scanUsageDate: todayStr 
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to increment scan count (likely offline):', err?.message);
+    }
   };
 
   const upgradeToPremium = async () => {

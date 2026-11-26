@@ -16,26 +16,6 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
-static const char* CLASS_NAMES[] = {
-    "alopecia",             // 0
-    "crust_scale",          // 1
-    "erythema",             // 2
-    "excoriation",          // 3
-    "hot_spot",             // 4
-    "hyperpigmentation",    // 5
-    "lichenification",      // 6
-    "mass_growth",          // 7
-    "oral_lesion",          // 8
-    "papule_pustule",       // 9
-    "swelling",             // 10
-    "ulceration",           // 11
-    "conjunctival_redness", // 12
-    "corneal_opacity",      // 13
-    "eyelid_mass",          // 14
-    "eyelid_swelling",      // 15
-    "lens_opacity",         // 16
-    "ocular_discharge"      // 17
-};
 static const int NUM_CLASSES = 18;
 static const int TARGET_SIZE = 640;
 
@@ -99,13 +79,17 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_initModel(JNIEnv* env, jobject thiz, j
     }
 
     g_yolo.clear();
-    // Use stable ARM NEON CPU with FP16 & lightmode (avoids Vulkan shader compilation stalls/crashes)
+    // Safe, universally compatible CPU settings:
+    // - No Vulkan (avoids shader compile hangs & GPU driver crashes)
+    // - lightmode = true (frees intermediate blobs to cut peak RAM ~60%)
+    // - use_fp16_arithmetic = false (avoids SIGILL on older ARM/x86 CPUs without FP16 ISA)
     g_yolo.opt.use_vulkan_compute = false;
     g_yolo.opt.lightmode = true;
     g_yolo.opt.use_packing_layout = true;
     g_yolo.opt.use_fp16_packed = true;
     g_yolo.opt.use_fp16_storage = true;
-    g_yolo.opt.use_fp16_arithmetic = true;
+    g_yolo.opt.use_fp16_arithmetic = false;
+
     int threads = ncnn::get_big_cpu_count();
     if (threads < 1) threads = 2;
     if (threads > 4) threads = 4;
@@ -121,21 +105,23 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_initModel(JNIEnv* env, jobject thiz, j
     }
 
     g_model_loaded = true;
-    LOGD("YOLOv11 NCNN model successfully loaded (CPU FP16, %d threads)!", threads);
+    LOGD("YOLOv11 NCNN model loaded cleanly (CPU lightmode, %d threads)", threads);
     return JNI_TRUE;
 }
 
-extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz, jobject bitmap, jfloat confThreshold, jfloat nmsThreshold) {
+// Returns a flat float array of 6 floats per detection: [class_id, conf, xc, yc, w, h, ...]
+// Avoids JNI FindClass/NewObject calls on background coroutine threads.
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmapFlat(JNIEnv* env, jobject thiz, jobject bitmap, jfloat confThreshold, jfloat nmsThreshold) {
     std::lock_guard<std::mutex> lock(g_yolo_mutex);
     if (!g_model_loaded) {
-        LOGE("Model not initialized before detectBitmap call");
+        LOGE("Model not initialized before detectBitmapFlat call");
         return nullptr;
     }
 
     AndroidBitmapInfo info;
     if (AndroidBitmap_getInfo(env, bitmap, &info) < 0 || info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-        LOGE("Invalid bitmap format; expected RGBA_8888");
+        LOGE("Invalid bitmap format; expected RGBA_8888 (got %d)", info.format);
         return nullptr;
     }
 
@@ -147,7 +133,7 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
     }
 
     // 1. Calculate Letterbox Scaling
-    float scale = std::min((float)TARGET_SIZE / img_w, (float)TARGET_SIZE / img_h);
+    float scale = std::min((float)TARGET_SIZE / (float)img_w, (float)TARGET_SIZE / (float)img_h);
     int scaled_w = std::max(1, std::min(TARGET_SIZE, (int)(img_w * scale)));
     int scaled_h = std::max(1, std::min(TARGET_SIZE, (int)(img_h * scale)));
     int pad_x = (TARGET_SIZE - scaled_w) / 2;
@@ -170,7 +156,7 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
     in.release();
 
     // 4. Normalize [0..1]
-    const float norm_vals[3] = { 1 / 255.f, 1 / 255.f, 1 / 255.f };
+    const float norm_vals[3] = { 1.f / 255.f, 1.f / 255.f, 1.f / 255.f };
     in_pad.substract_mean_normalize(0, norm_vals);
 
     // 5. Run Inference
@@ -185,11 +171,12 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
         return nullptr;
     }
 
+    LOGD("NCNN output tensor: dims=%d w=%d h=%d c=%d", out.dims, out.w, out.h, out.c);
+
     // Shape is [22, 8400]: w = 8400, h = 22
     std::vector<Object> proposals;
     if (out.w == 8400 && out.h == (4 + NUM_CLASSES)) {
         for (int i = 0; i < out.w; i++) {
-            // Find max class probability among 18 classes
             int best_class = -1;
             float best_score = -1.f;
             for (int c = 0; c < NUM_CLASSES; c++) {
@@ -200,7 +187,7 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
                 }
             }
 
-            if (best_score >= confThreshold && best_class >= 0) {
+            if (best_score >= confThreshold && best_class >= 0 && best_class < NUM_CLASSES) {
                 float box_xc = out.row(0)[i];
                 float box_yc = out.row(1)[i];
                 float box_w  = out.row(2)[i];
@@ -212,7 +199,6 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
                 float orig_w  = box_w / scale;
                 float orig_h  = box_h / scale;
 
-                // Normalize [0..1] relative to original image dimensions
                 Object obj;
                 obj.class_id = best_class;
                 obj.conf = best_score;
@@ -224,6 +210,8 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
                 proposals.push_back(obj);
             }
         }
+    } else {
+        LOGE("Unexpected output shape: w=%d, h=%d", out.w, out.h);
     }
 
     // Sort proposals by confidence descending
@@ -235,19 +223,28 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
     std::vector<int> picked;
     nms_sorted_bboxes(proposals, picked, nmsThreshold);
 
-    // Build Java Detection[] array
-    jclass detClass = env->FindClass("com/pawscura/yoloncnn/YoloDetection");
-    jmethodID detConstructor = env->GetMethodID(detClass, "<init>", "(ILjava/lang/String;FFFFFF)V");
-    jobjectArray resultArray = env->NewObjectArray((jsize)picked.size(), detClass, nullptr);
+    LOGD("NCNN inference complete: %zu proposals -> %zu kept after NMS", proposals.size(), picked.size());
 
-    for (size_t i = 0; i < picked.size(); i++) {
-        const Object& obj = proposals[picked[i]];
-        jstring classNameStr = env->NewStringUTF(CLASS_NAMES[obj.class_id]);
-        jobject detObj = env->NewObject(detClass, detConstructor,
-            obj.class_id, classNameStr, obj.conf, obj.xc, obj.yc, obj.w, obj.h);
-        env->SetObjectArrayElement(resultArray, (jsize)i, detObj);
-        env->DeleteLocalRef(classNameStr);
-        env->DeleteLocalRef(detObj);
+    // Pack flat float array [class_id, conf, xc, yc, w, h, ...]
+    const jsize floatCount = (jsize)(picked.size() * 6);
+    jfloatArray resultArray = env->NewFloatArray(floatCount);
+    if (!resultArray) {
+        LOGE("Failed to allocate jfloatArray of size %d", (int)floatCount);
+        return nullptr;
+    }
+
+    if (floatCount > 0) {
+        std::vector<jfloat> buf(floatCount);
+        for (size_t i = 0; i < picked.size(); i++) {
+            const Object& obj = proposals[picked[i]];
+            buf[i * 6 + 0] = (jfloat)obj.class_id;
+            buf[i * 6 + 1] = obj.conf;
+            buf[i * 6 + 2] = obj.xc;
+            buf[i * 6 + 3] = obj.yc;
+            buf[i * 6 + 4] = obj.w;
+            buf[i * 6 + 5] = obj.h;
+        }
+        env->SetFloatArrayRegion(resultArray, 0, floatCount, buf.data());
     }
 
     return resultArray;
