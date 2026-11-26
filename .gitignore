@@ -21,3 +21,13 @@ veda
 .env.local
 *.apk
 *.aab
+docs/
+qa_tests/
+testing_suite/
+*.txt
+*.docx
+preview.html
+test_shot*.png
+expo_shot*.png
+*.pt
+*.onnx

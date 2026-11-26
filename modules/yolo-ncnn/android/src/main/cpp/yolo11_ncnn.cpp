@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <mutex>
 #include <android/log.h>
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
@@ -49,6 +50,7 @@ struct Object {
 
 static ncnn::Net g_yolo;
 static bool g_model_loaded = false;
+static std::mutex g_yolo_mutex;
 
 static inline float intersection_area(const Object& a, const Object& b) {
     float x1 = std::max(a.xc - a.w / 2.f, b.xc - b.w / 2.f);
@@ -87,6 +89,7 @@ static void nms_sorted_bboxes(const std::vector<Object>& objects, std::vector<in
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_pawscura_yoloncnn_YoloNcnnModule_initModel(JNIEnv* env, jobject thiz, jobject assetManager) {
+    std::lock_guard<std::mutex> lock(g_yolo_mutex);
     if (g_model_loaded) return JNI_TRUE;
 
     AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
@@ -96,27 +99,35 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_initModel(JNIEnv* env, jobject thiz, j
     }
 
     g_yolo.clear();
-    g_yolo.opt.use_vulkan_compute = true;
+    // Use stable ARM NEON CPU with FP16 & lightmode (avoids Vulkan shader compilation stalls/crashes)
+    g_yolo.opt.use_vulkan_compute = false;
+    g_yolo.opt.lightmode = true;
+    g_yolo.opt.use_packing_layout = true;
     g_yolo.opt.use_fp16_packed = true;
     g_yolo.opt.use_fp16_storage = true;
     g_yolo.opt.use_fp16_arithmetic = true;
-    g_yolo.opt.num_threads = ncnn::get_big_cpu_count();
+    int threads = ncnn::get_big_cpu_count();
+    if (threads < 1) threads = 2;
+    if (threads > 4) threads = 4;
+    g_yolo.opt.num_threads = threads;
 
     int ret_param = g_yolo.load_param(mgr, "models/best.ncnn.param");
     int ret_bin = g_yolo.load_model(mgr, "models/best.ncnn.bin");
 
     if (ret_param != 0 || ret_bin != 0) {
         LOGE("Failed to load NCNN model: param=%d, bin=%d", ret_param, ret_bin);
+        g_yolo.clear();
         return JNI_FALSE;
     }
 
     g_model_loaded = true;
-    LOGD("YOLOv11 NCNN model successfully loaded from assets!");
+    LOGD("YOLOv11 NCNN model successfully loaded (CPU FP16, %d threads)!", threads);
     return JNI_TRUE;
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz, jobject bitmap, jfloat confThreshold, jfloat nmsThreshold) {
+    std::lock_guard<std::mutex> lock(g_yolo_mutex);
     if (!g_model_loaded) {
         LOGE("Model not initialized before detectBitmap call");
         return nullptr;
@@ -128,18 +139,26 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
         return nullptr;
     }
 
-    int img_w = info.width;
-    int img_h = info.height;
+    int img_w = (int)info.width;
+    int img_h = (int)info.height;
+    if (img_w <= 0 || img_h <= 0) {
+        LOGE("Invalid bitmap dimensions: %dx%d", img_w, img_h);
+        return nullptr;
+    }
 
     // 1. Calculate Letterbox Scaling
     float scale = std::min((float)TARGET_SIZE / img_w, (float)TARGET_SIZE / img_h);
-    int scaled_w = (int)(img_w * scale);
-    int scaled_h = (int)(img_h * scale);
+    int scaled_w = std::max(1, std::min(TARGET_SIZE, (int)(img_w * scale)));
+    int scaled_h = std::max(1, std::min(TARGET_SIZE, (int)(img_h * scale)));
     int pad_x = (TARGET_SIZE - scaled_w) / 2;
     int pad_y = (TARGET_SIZE - scaled_h) / 2;
 
     // 2. Convert Bitmap to NCNN Mat
     ncnn::Mat in = ncnn::Mat::from_android_bitmap_resize(env, bitmap, ncnn::Mat::PIXEL_RGBA2RGB, scaled_w, scaled_h);
+    if (in.empty()) {
+        LOGE("Failed to convert Android Bitmap to NCNN Mat");
+        return nullptr;
+    }
 
     // 3. Add Letterbox Padding to 640x640
     ncnn::Mat in_pad;
@@ -148,6 +167,7 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
     int left = pad_x;
     int right = TARGET_SIZE - scaled_w - pad_x;
     ncnn::copy_make_border(in, in_pad, top, bottom, left, right, ncnn::BORDER_CONSTANT, 114.f);
+    in.release();
 
     // 4. Normalize [0..1]
     const float norm_vals[3] = { 1 / 255.f, 1 / 255.f, 1 / 255.f };
@@ -158,7 +178,12 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_detectBitmap(JNIEnv* env, jobject thiz
     ex.input("in0", in_pad);
 
     ncnn::Mat out;
-    ex.extract("out0", out);
+    int ret = ex.extract("out0", out);
+    in_pad.release();
+    if (ret != 0 || out.empty()) {
+        LOGE("NCNN extraction failed: ret=%d", ret);
+        return nullptr;
+    }
 
     // Shape is [22, 8400]: w = 8400, h = 22
     std::vector<Object> proposals;

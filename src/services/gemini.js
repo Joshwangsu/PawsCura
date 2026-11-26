@@ -20,10 +20,16 @@ try {
   console.warn('Failed to initialize GoogleGenAI client:', err);
 }
 
-// Model names — gemini-3.5-flash is primary (fast & multimodal vision), gemini-3-flash-preview is fallback
-const PRIMARY_MODEL = 'gemini-3.5-flash';
-const FALLBACK_MODEL = 'gemini-3-flash-preview';
-const THIRD_MODEL = 'gemini-3.8-flash';
+// Model names — gemini-3-flash-preview is primary (verified fast & available), gemini-3.5-flash is fallback
+const PRIMARY_MODEL = 'gemini-3-flash-preview';
+const FALLBACK_MODEL = 'gemini-3.5-flash';
+
+function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini request timed out')), ms)),
+  ]);
+}
 
 // ── Chatbot ───────────────────────────────────────────────────────────────────
 export async function chatWithVet(messageHistory) {
@@ -223,20 +229,12 @@ Return raw JSON only. Do not surround with markdown code blocks.
  *  4. Formats description with Observations, Practical Recommendations, and What to Avoid.
  */
 export async function analyzePetCondition(base64Image, mimeType = 'image/jpeg', registeredPets = [], imageUri = null) {
-  // Step 1: Identify pet
-  let petMatch = {
+  // Step 1: Resolve target pet locally (no image sent to Gemini)
+  const petMatch = {
     matchedPetId: registeredPets.length > 0 ? registeredPets[0].id : null,
     matchedPetName: registeredPets.length > 0 ? registeredPets[0].name : 'the pet',
     matchConfidence: registeredPets.length > 0 ? 94 : 0,
   };
-
-  if (registeredPets && registeredPets.length > 1) {
-    try {
-      petMatch = await visuallyIdentifyPet(base64Image, mimeType, registeredPets);
-    } catch (e) {
-      // fallback to first pet
-    }
-  }
 
   const targetPetName = petMatch.matchedPetName || (registeredPets[0] ? registeredPets[0].name : 'the pet');
 
@@ -312,15 +310,21 @@ Return raw JSON only.
   try {
     let response;
     try {
-      response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
-        contents: [{ text: DYNAMIC_PROMPT }],
-      });
+      response = await withTimeout(
+        ai.models.generateContent({
+          model: PRIMARY_MODEL,
+          contents: [{ text: DYNAMIC_PROMPT }],
+        }),
+        8000
+      );
     } catch (e) {
-      response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
-        contents: [{ text: DYNAMIC_PROMPT }],
-      });
+      response = await withTimeout(
+        ai.models.generateContent({
+          model: FALLBACK_MODEL,
+          contents: [{ text: DYNAMIC_PROMPT }],
+        }),
+        6000
+      );
     }
 
     const cleanJson = (response.text || '').replace(/```json/gi, '').replace(/```/g, '').trim();

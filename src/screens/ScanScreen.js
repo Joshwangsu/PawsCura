@@ -28,7 +28,7 @@ import { useAds } from '../services/ads';
 import { AdRichCard } from '../components/AdRich';
 import { getPetPhotoUri } from '../components/PetCard';
 
-const SCAN_MIN_SECONDS = 5;
+const SCAN_MIN_SECONDS = 2;
 
 const SCAN_TIPS = [
   { icon: 'sunny-outline', text: 'Good lighting helps get a clear scan' },

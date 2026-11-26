@@ -6,10 +6,11 @@ import android.net.Uri
 import android.util.Base64
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.io.InputStream
 
 class YoloNcnnModule : Module() {
     companion object {
+        private const val MAX_DECODE_DIM = 1280
+
         init {
             System.loadLibrary("yolo11_ncnn")
         }
@@ -21,22 +22,33 @@ class YoloNcnnModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("YoloNcnn")
 
-        OnCreate {
-            val context = appContext.reactContext ?: return@OnCreate
-            initModel(context.assets)
-        }
-
         AsyncFunction("detect") { imageSource: String, confThreshold: Float?, nmsThreshold: Float? ->
             val context = appContext.reactContext ?: throw Exception("React context unavailable")
-            initModel(context.assets)
+            if (!initModel(context.assets)) {
+                throw Exception("Failed to load YOLOv11 NCNN model from assets")
+            }
 
             val conf = confThreshold ?: 0.20f
             val nms = nmsThreshold ?: 0.45f
 
-            val bitmap = loadBitmapFromSource(context, imageSource)
-                ?: throw Exception("Failed to decode image from source: $imageSource")
+            val rawBitmap = loadDownsampledBitmap(context, imageSource)
+                ?: throw Exception("Failed to decode image from source")
 
-            val detections = detectBitmap(bitmap, conf, nms) ?: emptyArray()
+            val argbBitmap = if (rawBitmap.config == Bitmap.Config.ARGB_8888) {
+                rawBitmap
+            } else {
+                val copy = rawBitmap.copy(Bitmap.Config.ARGB_8888, false)
+                rawBitmap.recycle()
+                copy ?: throw Exception("Failed to convert bitmap to ARGB_8888")
+            }
+
+            val detections = try {
+                detectBitmap(argbBitmap, conf, nms) ?: emptyArray()
+            } finally {
+                if (!argbBitmap.isRecycled) {
+                    argbBitmap.recycle()
+                }
+            }
 
             return@AsyncFunction detections.map { d ->
                 mapOf(
@@ -52,19 +64,52 @@ class YoloNcnnModule : Module() {
         }
     }
 
-    private fun loadBitmapFromSource(context: android.content.Context, source: String): Bitmap? {
+    private fun computeInSampleSize(width: Int, height: Int, maxDim: Int): Int {
+        var inSampleSize = 1
+        var halfW = width / 2
+        var halfH = height / 2
+        while (halfW / inSampleSize >= maxDim || halfH / inSampleSize >= maxDim) {
+            inSampleSize *= 2
+        }
+        return inSampleSize
+    }
+
+    private fun loadDownsampledBitmap(context: android.content.Context, source: String): Bitmap? {
         return try {
-            if (source.startsWith("data:image") || source.length > 200 && !source.startsWith("file:") && !source.startsWith("content:")) {
+            val isBase64 = source.startsWith("data:image") ||
+                (source.length > 200 && !source.startsWith("file:") && !source.startsWith("content:"))
+
+            if (isBase64) {
                 val clean = if (source.contains(",")) source.substringAfter(",") else source
                 val bytes = Base64.decode(clean, Base64.DEFAULT)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                val opts = BitmapFactory.Options().apply {
+                    inSampleSize = computeInSampleSize(bounds.outWidth, bounds.outHeight, MAX_DECODE_DIM)
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
             } else if (source.startsWith("content:") || source.startsWith("file:")) {
                 val uri = Uri.parse(source)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
+                    BitmapFactory.decodeStream(stream, null, bounds)
+                }
+                val opts = BitmapFactory.Options().apply {
+                    inSampleSize = computeInSampleSize(bounds.outWidth, bounds.outHeight, MAX_DECODE_DIM)
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, opts)
                 }
             } else {
-                BitmapFactory.decodeFile(source)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(source, bounds)
+                val opts = BitmapFactory.Options().apply {
+                    inSampleSize = computeInSampleSize(bounds.outWidth, bounds.outHeight, MAX_DECODE_DIM)
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                BitmapFactory.decodeFile(source, opts)
             }
         } catch (e: Exception) {
             null
