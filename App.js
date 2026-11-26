@@ -4,9 +4,11 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
+import { AlertProvider } from './src/components/CustomAlert';
 
 import { HealthProvider } from './src/context/HealthContext';
 import { AuthProvider } from './src/context/AuthContext';
@@ -96,20 +98,24 @@ export default function App() {
   }
 
   return (
-    <AppErrorBoundary>
-      <AuthProvider>
-        <SubscriptionProvider>
-          <HealthProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <NavigationContainer>
-                <StatusBar style="light" />
-                <AppNavigator />
-              </NavigationContainer>
-              {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-            </GestureHandlerRootView>
-          </HealthProvider>
-        </SubscriptionProvider>
-      </AuthProvider>
-    </AppErrorBoundary>
+    <SafeAreaProvider>
+      <AppErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <AlertProvider>
+            <AuthProvider>
+              <SubscriptionProvider>
+                <HealthProvider>
+                  <NavigationContainer>
+                    <StatusBar style="light" />
+                    <AppNavigator />
+                  </NavigationContainer>
+                  {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+                </HealthProvider>
+              </SubscriptionProvider>
+            </AuthProvider>
+          </AlertProvider>
+        </GestureHandlerRootView>
+      </AppErrorBoundary>
+    </SafeAreaProvider>
   );
 }

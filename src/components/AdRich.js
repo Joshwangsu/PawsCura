@@ -10,6 +10,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 import { isDismissed, dismiss } from '../services/ads';
 import { openAd } from './AdBanner';
@@ -113,6 +114,7 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
         keyExtractor={(item, index) => item.id || `ad_${index}`}
         horizontal
         pagingEnabled
+        nestedScrollEnabled={true}
         showsHorizontalScrollIndicator={false}
         snapToInterval={containerWidth}
         decelerationRate="fast"
@@ -151,6 +153,7 @@ export function AdRichRotator({ ads = [], interval = 5000 }) {
 
 /** Full-screen popup shown once per app session */
 export function AdPopup({ ad }) {
+  const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const key = ad ? `popup:${ad.id}` : null;
 
@@ -164,8 +167,16 @@ export function AdPopup({ ad }) {
   const close = () => { dismiss(key); setVisible(false); };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <View style={styles.backdrop}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={close}>
+      <View
+        style={[
+          styles.backdrop,
+          {
+            paddingTop: Math.max(insets.top, 20),
+            paddingBottom: Math.max(insets.bottom, 20),
+          },
+        ]}
+      >
         <View style={styles.popup}>
           <View style={styles.popupCardWrapper}>
             <AdRichCard ad={ad} style={styles.popupCard} />

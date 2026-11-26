@@ -8,7 +8,6 @@ import {
   Modal,
   ActivityIndicator,
   Image,
-  Alert,
   Animated,
   Easing,
   Platform,
@@ -21,7 +20,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useNavigation } from '@react-navigation/native';
 import { analyzePetCondition } from '../services/gemini';
+import { checkInternetConnectivity, classifyException, getErrorMessage } from '../utils/network';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { showAlert } from '../components/CustomAlert';
 import { useHealth } from '../context/HealthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAds } from '../services/ads';
@@ -37,7 +38,6 @@ const SCAN_TIPS = [
   { icon: 'leaf-outline', text: 'Clean the area gently before scanning' },
 ];
 
-// Step definitions — Ionicons only, no emoji (Rule 3)
 const ANALYSIS_STEPS = [
   { icon: 'cloud-upload-outline',    label: 'Uploading image' },
   { icon: 'hardware-chip-outline',   label: 'Running AI analysis' },
@@ -45,9 +45,8 @@ const ANALYSIS_STEPS = [
   { icon: 'document-text-outline',   label: 'Generating report' },
 ];
 
-// Brand accent used in the loading modal (10% accent rule)
-const MODAL_ACCENT = '#D88D59'; // warm terracotta accent — visible against dark overlay
-const MODAL_ACCENT_DIM = 'rgba(216,141,89,0.18)'; // tinted surface, not same as border
+const MODAL_ACCENT = '#D88D59';
+const MODAL_ACCENT_DIM = 'rgba(216,141,89,0.18)';
 
 function ScanLoadingModal({ visible, ads = [] }) {
   const insets = useSafeAreaInsets();
@@ -61,7 +60,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
   useEffect(() => {
     if (!visible) return;
 
-    // Fade in the whole modal
     fadeAnim.setValue(0);
     setStepIndex(0);
     setSecondsLeft(SCAN_MIN_SECONDS);
@@ -76,7 +74,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
       useNativeDriver: true,
     }).start();
 
-    // Scan line: top → bottom sweep, reset, loop — 1.8 s period
     const scanLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(scanLineAnim, {
@@ -90,7 +87,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
     );
     scanLoop.start();
 
-    // Subtle breathe pulse on the icon ring — scale 1 → 1.12, not exaggerated
     const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -109,7 +105,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
     );
     pulseLoop.start();
 
-    // Advance step label every 1.4 s
     const interval = setInterval(() => {
       setStepIndex((prev) => (prev + 1) % ANALYSIS_STEPS.length);
     }, 1400);
@@ -143,31 +138,25 @@ function ScanLoadingModal({ visible, ads = [] }) {
           },
         ]}
       >
-        {/* ── Brought-down Paw Logo (well clear of Dynamic Island) ── */}
         <View style={scanModal.iconRingOuter}>
           <Animated.View style={[scanModal.iconRing, { transform: [{ scale: pulseAnim }] }]}>
             <Ionicons name="paw" size={38} color={MODAL_ACCENT} />
           </Animated.View>
         </View>
 
-        {/* ── Scan viewfinder frame with sweep line ── */}
         <View style={scanModal.scanBox}>
-          {/* Corner brackets only */}
           <View style={[scanModal.corner, scanModal.cornerTL]} />
           <View style={[scanModal.corner, scanModal.cornerTR]} />
           <View style={[scanModal.corner, scanModal.cornerBL]} />
           <View style={[scanModal.corner, scanModal.cornerBR]} />
 
-          {/* Sweep line */}
           <Animated.View
             style={[scanModal.scanLine, { transform: [{ translateY }] }]}
           />
 
-          {/* Overline label */}
           <Text style={scanModal.scanBoxLabel}>SCANNING</Text>
         </View>
 
-        {/* ── Step indicator ── */}
         <View style={scanModal.stepRow}>
           <View style={scanModal.stepIconBadge}>
             <Ionicons name={step.icon} size={15} color={MODAL_ACCENT} />
@@ -175,7 +164,6 @@ function ScanLoadingModal({ visible, ads = [] }) {
           <Text style={scanModal.stepLabel}>{step.label}</Text>
         </View>
 
-        {/* ── Progress dots ── */}
         <View style={scanModal.dots}>
           {ANALYSIS_STEPS.map((_, i) => (
             <View
@@ -188,12 +176,10 @@ function ScanLoadingModal({ visible, ads = [] }) {
           ))}
         </View>
 
-        {/* ── Countdown text ── */}
         <Text style={scanModal.disclaimer}>
           {secondsLeft > 0 ? `Your results will be ready in ${secondsLeft}s` : 'Almost done...'}
         </Text>
 
-        {/* ── Sponsored ad card ── */}
         {shownAd && (
           <View style={scanModal.adWrapper}>
             <AdRichCard ad={shownAd} imageHeight={130} style={{ marginVertical: 4 }} />
@@ -206,6 +192,8 @@ function ScanLoadingModal({ visible, ads = [] }) {
 
 
 export default function ScanScreen() {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { pets, healthLogs, addHealthLog, updateHealthLog } = useHealth();
   const { isPremium, scanUsage, incrementScanCount } = useSubscription();
   const navigation = useNavigation();
@@ -315,8 +303,7 @@ export default function ScanScreen() {
       const options = {
         mediaTypes: 'images',
         allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.5,
+        quality: 0.9,
         base64: true, // We need this for Gemini & Cloudinary
       };
 
@@ -324,14 +311,22 @@ export default function ScanScreen() {
       if (useCamera) {
         const camPerm = await ImagePicker.requestCameraPermissionsAsync();
         if (camPerm.status !== 'granted') {
-          Alert.alert('Permission Required', 'Please enable camera access in your device settings to scan your pet.');
+          showAlert({
+            title: 'Permission Required',
+            message: 'Please enable camera access in your device settings to scan your pet.',
+            type: 'warning',
+          });
           return;
         }
         pickerResult = await ImagePicker.launchCameraAsync(options);
       } else {
         const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (libPerm.status !== 'granted') {
-          Alert.alert('Permission Required', 'Please enable photo library access in your device settings to upload a photo.');
+          showAlert({
+            title: 'Permission Required',
+            message: 'Please enable photo library access in your device settings to upload a photo.',
+            type: 'warning',
+          });
           return;
         }
         pickerResult = await ImagePicker.launchImageLibraryAsync(options);
@@ -342,24 +337,45 @@ export default function ScanScreen() {
         setImageUri(asset.uri);
         setImageBase64(asset.base64 || null);
         setUploadedCloudUrl(null);
-        setResult(null); // Clear old results
+        setResult(null);
         setAutoSaveStatus(null);
         setAutoSavedPetName(null);
-        setAutoSavedRecordId(null); // Reset scan record link
-        
-        // Convert to proper mime type and analyze
+        setAutoSavedRecordId(null);
+
         const mimeType = asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
         
         setLoading(true);
         const startedAt = Date.now();
-        // Start uploading image to Cloudinary in parallel during the 5-second scan
-        const uploadPromise = uploadToCloudinary(asset.uri, asset.base64).catch((err) => {
-          console.warn('Parallel Cloudinary upload warning:', err);
-          return null;
-        });
 
         try {
           const analysisResult = await analyzePetCondition(asset.base64, mimeType, pets, asset.uri);
+
+          // Gemini gatekeeper rejected non-dog/non-cat photo before local YOLO execution
+          if (analysisResult?.status === 'invalid_image' || analysisResult?.isValidPet === false) {
+            setImageBase64(null);
+            setUploadedCloudUrl(null);
+            setAutoSaveStatus(null);
+            setAutoSavedPetName(null);
+            setAutoSavedRecordId(null);
+            setResult({
+              isInvalidPetImage: true,
+              status: 'invalid_image',
+              suspectedCondition: 'Not a Dog or Cat',
+              urgencyLevel: 'Invalid Image',
+              analysis:
+                analysisResult.validationReason ||
+                'The AI identified that this picture is not an actual dog or cat. Please upload a clear photo of a real dog or cat to run a health assessment.',
+            });
+            setLoading(false);
+            return;
+          }
+
+          // Start uploading image to Cloudinary only after passing pet validation
+          const uploadPromise = uploadToCloudinary(asset.uri, asset.base64).catch((err) => {
+            console.warn('Cloudinary upload warning:', err);
+            return null;
+          });
+
           // Keep the loading screen (and ad) up for at least SCAN_MIN_SECONDS
           const remaining = SCAN_MIN_SECONDS * 1000 - (Date.now() - startedAt);
           if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
@@ -379,7 +395,13 @@ export default function ScanScreen() {
           }
         } catch (error) {
           console.error('Scan error:', error);
-          Alert.alert('Analysis Failed', 'Failed to analyze image. Please check your connection and try again.');
+          const isOnline = await checkInternetConnectivity(2000).catch(() => null);
+          const classified = classifyException(error, { isOnline });
+          showAlert({
+            title: 'Analysis Failed',
+            message: getErrorMessage(classified.code, 'action'),
+            type: 'error',
+          });
         } finally {
           setLoading(false);
         }
@@ -504,7 +526,13 @@ export default function ScanScreen() {
       }
     } catch (error) {
       console.error('Save to records error:', error);
-      Alert.alert('Save Failed', 'Could not save the record. Please check your connection and try again.');
+      const isOnline = await checkInternetConnectivity(2000).catch(() => null);
+      const classified = classifyException(error, { isOnline });
+      showAlert({
+        title: 'Save Failed',
+        message: getErrorMessage(classified.code, 'action'),
+        type: 'error',
+      });
     } finally {
       setSaving(false);
     }
@@ -539,14 +567,14 @@ export default function ScanScreen() {
           colors={[Colors.primary, Colors.primaryLight]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.header}
+          style={[styles.header, { paddingTop: topInset + Spacing.md }]}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <Ionicons name="scan" size={24} color="#fff" />
             <Text style={[styles.headerTitle, { marginBottom: 0 }]}>Pet Scan</Text>
           </View>
           <Text style={styles.headerSub}>
-            Scan visible skin conditions, wounds or abnormalities with AI pet matching
+            Scan visible skin conditions, wounds or anomalies with AI pet matching
           </Text>
         </LinearGradient>
 
@@ -581,14 +609,29 @@ export default function ScanScreen() {
         </View>
 
         {/* AI Result Card */}
-        {result && !loading && (
+        {result && !loading && result.isInvalidPetImage && (
+          <View style={styles.resultCard}>
+            <View style={styles.resultHeader}>
+              <Ionicons name="alert-circle" size={20} color={Colors.warning} />
+              <Text style={styles.resultTitle}>Not a Valid Pet Photo</Text>
+            </View>
+            <View style={styles.resultSection}>
+              <Text style={styles.resultLabel}>Description</Text>
+              <Text style={styles.resultValue}>{result.analysis}</Text>
+            </View>
+            <Text style={styles.disclaimerText}>
+              This image was rejected before local disease analysis, was not saved to Firebase, and did not use your daily scan limit.
+            </Text>
+          </View>
+        )}
+
+        {result && !loading && !result.isInvalidPetImage && (
           <View style={styles.resultCard}>
             <View style={styles.resultHeader}>
               <Ionicons name="medical" size={20} color={Colors.primary} />
               <Text style={styles.resultTitle}>AI Assessment Complete</Text>
             </View>
 
-            {/* 4. Suspected Anomaly (Top of the Card) */}
             <View style={styles.resultSection}>
               <Text style={styles.resultLabel}>Suspected Anomaly</Text>
               <Text style={styles.resultValuePrimary}>
@@ -597,7 +640,6 @@ export default function ScanScreen() {
               </Text>
             </View>
 
-            {/* 3. Urgency & Clinical Severity Badge (Right below 4) */}
             <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(result.urgencyLevel) }]}>
               <Text style={styles.urgencyText}>
                 {result.urgencyLevel}
@@ -605,19 +647,19 @@ export default function ScanScreen() {
               </Text>
             </View>
 
-            {/* 9. Urgent Case Warning Banner (Right below 3) */}
             {result.urgencyLevel && result.urgencyLevel.toLowerCase().includes('urgent') && (
               <TouchableOpacity
                 style={styles.urgentWarningBanner}
                 activeOpacity={0.85}
-                onPress={() => Alert.alert(
-                  'Urgent Veterinary Attention Required',
-                  'Your pet may need immediate professional care. We strongly recommend visiting a nearby vet clinic as soon as possible.',
-                  [
+                onPress={() => showAlert({
+                  title: 'Urgent Veterinary Attention Required',
+                  message: 'Your pet may need immediate professional care. We strongly recommend visiting a nearby vet clinic as soon as possible.',
+                  type: 'warning',
+                  buttons: [
                     { text: 'Find Nearby Clinics', onPress: () => navigation.navigate('Clinics') },
                     { text: 'Dismiss', style: 'cancel' },
-                  ]
-                )}
+                  ],
+                })}
               >
                 <Ionicons name="warning" size={18} color="#92400E" />
                 <Text style={styles.urgentWarningText}>
@@ -627,7 +669,6 @@ export default function ScanScreen() {
               </TouchableOpacity>
             )}
 
-            {/* 5. Symptoms (Title "Symptoms" with same normal font size) */}
             {Array.isArray(result.detectedSymptoms) && result.detectedSymptoms.length > 0 && (
               <View style={styles.resultSection}>
                 <Text style={styles.resultLabel}>Symptoms</Text>
@@ -641,7 +682,6 @@ export default function ScanScreen() {
               </View>
             )}
 
-            {/* 6. Other Possible Anomalies */}
             {result.alternatives && result.alternatives.length > 0 && (
               <View style={styles.resultSection}>
                 <Text style={styles.resultLabel}>Other Possible Anomalies</Text>
@@ -653,7 +693,6 @@ export default function ScanScreen() {
               </View>
             )}
 
-            {/* 7. Description (AI Description generated via Gemini) */}
             <View style={styles.resultSection}>
               <Text style={styles.resultLabel}>Description</Text>
               <Text style={styles.resultValue}>{result.analysis}</Text>
@@ -663,9 +702,7 @@ export default function ScanScreen() {
               Disclaimer: This is an AI assessment and not a substitute for professional veterinary care.
             </Text>
 
-            {/* 10. Action Buttons */}
             <View style={{ gap: 10, marginTop: Spacing.md }}>
-              {/* Primary Action: Ask Virtual Vet */}
               <TouchableOpacity
                 style={styles.chatbotLinkBtn}
                 onPress={() => navigation.navigate('Chatbot', {
@@ -683,7 +720,6 @@ export default function ScanScreen() {
                 <Text style={styles.chatbotLinkText}>Ask Virtual Vet Chatbot</Text>
               </TouchableOpacity>
 
-              {/* Secondary Action: Find Nearby Clinics */}
               <TouchableOpacity
                 style={styles.resultClinicsBtn}
                 onPress={() => navigation.navigate('Clinics')}
@@ -694,7 +730,6 @@ export default function ScanScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* 2. Auto-Record Status (Grayed out at the bottom of the card with green checkmark) */}
             {autoSaveStatus === 'saving' && (
               <View style={[styles.autoSavingBanner, { marginTop: 14, backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1, marginBottom: 0 }]}>
                 <ActivityIndicator size="small" color="#64748B" />
@@ -822,7 +857,7 @@ export default function ScanScreen() {
       {/* Select Pet Modal */}
       <Modal visible={showPetModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.petModal}>
+          <View style={[styles.petModal, { paddingBottom: Math.max(insets.bottom + 12, 24) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Pet</Text>
               <TouchableOpacity onPress={() => setShowPetModal(false)}>
@@ -1557,17 +1592,10 @@ const styles = StyleSheet.create({
   },
 });
 
-// ─── Scan Loading Modal Styles ──────────────────────────────────────────────
-// Follows Anti-Generic UI policy v2.0:
-//   Rule 1: No nested same-surface cards
-//   Rule 2: All borders are visibly darker than their backgrounds
-//   Rule 3: No emoji — Ionicons throughout
-//   Rule 5: 60-30-10 — dark overlay (60%), tinted badge surface (30%), warm accent (10%)
-const SCAN_CORNER = 16; // corner bracket px
-const SCAN_THICK  = 2.5; // corner bracket stroke
+const SCAN_CORNER = 16;
+const SCAN_THICK  = 2.5;
 
 const scanModal = StyleSheet.create({
-  // Dark translucent canvas with safe area padding to prevent cramping at the top
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(48, 43, 41, 0.98)',
@@ -1577,7 +1605,6 @@ const scanModal = StyleSheet.create({
     gap: 10,
   },
 
-  // Outer ambient ring for the Paw Logo
   iconRingOuter: {
     width: 90,
     height: 90,
@@ -1588,7 +1615,6 @@ const scanModal = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Pulsing Paw Logo ring — brought down comfortably below Dynamic Island
   iconRing: {
     width: 76,
     height: 76,
@@ -1605,7 +1631,6 @@ const scanModal = StyleSheet.create({
     elevation: 4,
   },
 
-  // Compact scan viewfinder frame
   scanBox: {
     width: 140,
     height: 100,
@@ -1618,7 +1643,7 @@ const scanModal = StyleSheet.create({
     position: 'absolute',
     width: SCAN_CORNER,
     height: SCAN_CORNER,
-    borderColor: '#D88D59',  // 10% accent
+    borderColor: '#D88D59',
   },
   cornerTL: {
     top: 0, left: 0,
@@ -1645,7 +1670,6 @@ const scanModal = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
 
-  // Sweep line
   scanLine: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -1658,7 +1682,6 @@ const scanModal = StyleSheet.create({
     elevation: 6,
   },
 
-  // Overline label
   scanBoxLabel: {
     position: 'absolute',
     bottom: 4,
@@ -1668,7 +1691,6 @@ const scanModal = StyleSheet.create({
     letterSpacing: 3,
   },
 
-  // Step row: icon badge + label
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1692,7 +1714,6 @@ const scanModal = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Progress dots
   dots: {
     flexDirection: 'row',
     gap: 6,
@@ -1709,7 +1730,6 @@ const scanModal = StyleSheet.create({
     borderRadius: 3,
   },
 
-  // Helper countdown text
   disclaimer: {
     fontSize: 12,
     fontWeight: '500',

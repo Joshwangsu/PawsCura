@@ -8,14 +8,16 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Keyboard,
-  Image
+  Image,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { chatWithVet } from '../services/gemini';
+import { ERROR_TYPES, GeminiRequestError, checkInternetConnectivity, classifyException, getErrorMessage } from '../utils/network';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { doc, setDoc, getDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
@@ -24,6 +26,8 @@ import { db } from '../services/firebaseConfig';
 import { Modal } from 'react-native';
 
 export default function ChatbotScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { initialContext, scanRecordId } = route.params || {};
   const { user } = useAuth();
   const { isPremium } = useSubscription();
@@ -243,9 +247,12 @@ export default function ChatbotScreen({ route, navigation }) {
         }, { merge: true });
       }
 
-      const history = messages.map((m) => ({ role: m.role, text: m.text }));
+      const history = messages
+        .filter((m) => !m.isError)
+        .map((m) => ({ role: m.role, text: m.text }));
       history.push({ role: 'user', text: userText });
-      const aiResponseText = await chatWithVet(history);
+      const activeScanCtx = activeSessionId === contextSessionIdRef.current ? initialContext : null;
+      const aiResponseText = await chatWithVet(history, { scanContext: activeScanCtx });
 
       await addDoc(messagesRef, {
         chatsId: activeSessionId,
@@ -256,11 +263,19 @@ export default function ChatbotScreen({ route, navigation }) {
     } catch (error) {
       console.error('Failed to send message:', error);
       try {
+        let classified = error;
+        if (!(error instanceof GeminiRequestError)) {
+          const isOnline = await checkInternetConnectivity(2000).catch(() => null);
+          classified = classifyException(error, { isOnline });
+        }
+        const errMsg = getErrorMessage(classified.code || ERROR_TYPES.UNKNOWN_ERROR, 'chatbot');
         const messagesRef = collection(db, 'chats', user.uid, 'userSessions', activeSessionId, 'messages');
         await addDoc(messagesRef, {
           chatsId: activeSessionId,
           role: 'assistant',
-          text: 'I apologize, but I encountered a temporary connection issue while processing your question. Please try sending your message again.',
+          isError: true,
+          errorCode: classified.code || ERROR_TYPES.UNKNOWN_ERROR,
+          text: errMsg,
           timestamp: serverTimestamp(),
         });
       } catch (innerErr) {
@@ -292,13 +307,13 @@ export default function ChatbotScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.safe}>
       {/* Header with History Tab & New Chat Buttons */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: topInset + Spacing.sm }]}
       >
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={28} color="#fff" />
@@ -399,7 +414,7 @@ export default function ChatbotScreen({ route, navigation }) {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom + 4, 12) }]}>
               <TextInput
                 style={styles.input}
                 placeholder="Ask about your pet..."
@@ -508,7 +523,7 @@ export default function ChatbotScreen({ route, navigation }) {
           />
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

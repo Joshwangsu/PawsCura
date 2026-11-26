@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Image, Platform, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
@@ -8,6 +9,8 @@ import { useHealth } from '../context/HealthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 export default function HealthLogCard({ log, onPress }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const [showModal, setShowModal] = useState(false);
   const navigation = useNavigation();
   const { pets } = useHealth();
@@ -81,10 +84,10 @@ export default function HealthLogCard({ log, onPress }) {
 
       {/* Record Details Modal */}
       <Modal visible={showModal} animationType="slide" transparent={false} onRequestClose={() => setShowModal(false)}>
-        <View style={styles.modalFullContainer}>
+        <View style={[styles.modalFullContainer, { paddingTop: topInset + Spacing.sm, paddingBottom: Math.max(insets.bottom + 12, 24) }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Record Details</Text>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
+            <TouchableOpacity onPress={() => setShowModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={26} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>

@@ -62,6 +62,8 @@ function buildMapHtml(initialDataJson) {
     var routeLine = null;
     var lastRouteSig = '';
     var hasInitializedBounds = false;
+    var lastCenteredLat = null;
+    var lastCenteredLng = null;
     var activeFetchToken = 0;
 
     function notifyRN(data) {
@@ -214,10 +216,23 @@ function buildMapHtml(initialDataJson) {
         if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
         if (lastRouteSig !== '' && u) {
           lastRouteSig = '';
+          lastCenteredLat = u.latitude;
+          lastCenteredLng = u.longitude;
           map.flyTo([u.latitude, u.longitude], 13, { duration: 0.5 });
         } else if (!hasInitializedBounds && u) {
           hasInitializedBounds = true;
+          lastCenteredLat = u.latitude;
+          lastCenteredLng = u.longitude;
           map.setView([u.latitude, u.longitude], 13);
+        } else if (
+          u &&
+          (lastCenteredLat === null ||
+            Math.abs(u.latitude - lastCenteredLat) > 0.001 ||
+            Math.abs(u.longitude - lastCenteredLng) > 0.001)
+        ) {
+          lastCenteredLat = u.latitude;
+          lastCenteredLng = u.longitude;
+          map.flyTo([u.latitude, u.longitude], 14, { duration: 0.6 });
         }
         return;
       }
@@ -246,6 +261,7 @@ export default function InteractiveClinicMap({
   routeCoords,
   selectedClinic,
   onPressClinic,
+  onRefreshLocation,
 }) {
   const webViewRef = useRef(null);
   const [mapUri, setMapUri] = useState(null);
@@ -346,6 +362,9 @@ export default function InteractiveClinicMap({
 
   const handleRecenter = () => {
     webViewRef.current?.injectJavaScript('window.recenterMap && window.recenterMap(); true;');
+    if (typeof onRefreshLocation === 'function') {
+      onRefreshLocation();
+    }
   };
 
   if (!userCoords || !mapUri) {

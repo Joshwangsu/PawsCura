@@ -16,7 +16,7 @@ import { isDismissed, dismiss } from '../services/ads';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const openAd = (ad) => {
-  if (ad?.targetUrl) Linking.openURL(ad.targetUrl).catch(() => {});
+  if (ad?.targetUrl) Linking.openURL(ad.targetUrl).catch(() => { });
 };
 
 export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
@@ -30,6 +30,12 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
   const visibleAds = (ads || []).filter(
     (a) => a && !isDismissed(a.id) && !(dismissKey && isDismissed(dismissKey))
   );
+
+  useEffect(() => {
+    if (visibleAds.length > 0 && activeIndex >= visibleAds.length) {
+      setActiveIndex(0);
+    }
+  }, [visibleAds.length, activeIndex]);
 
   useEffect(() => {
     if (visibleAds.length <= 1) return undefined;
@@ -111,6 +117,7 @@ export default function AdBanner({ ads = [], dismissKey, interval = 4500 }) {
         keyExtractor={(item, index) => item.id || `banner_${index}`}
         horizontal
         pagingEnabled
+        nestedScrollEnabled={true}
         showsHorizontalScrollIndicator={false}
         snapToInterval={containerWidth}
         decelerationRate="fast"
@@ -194,7 +201,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     borderRadius: BorderRadius.md || 12,
     padding: 10,
-    ...(Shadows?.small || {}),
+    ...(Shadows?.sm || {}),
   },
   image: {
     width: 56,

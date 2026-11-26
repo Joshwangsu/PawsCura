@@ -12,7 +12,9 @@ import {
   Platform,
   Animated,
   Easing,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useHealth } from '../context/HealthContext';
@@ -27,6 +29,8 @@ import { AdPopup } from '../components/AdRich';
 const { width } = Dimensions.get('window');
 
 export default function HistoryScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { healthLogs, pets } = useHealth();
   const { isPremium } = useSubscription();
   const { topBanners, popup } = useAds('records');
@@ -174,7 +178,7 @@ export default function HistoryScreen({ navigation }) {
   return (
     <View style={styles.safe}>
       {/* ── Header ────────────────────────────────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topInset + Spacing.sm }]}>
         <View style={styles.headerInfo}>
           <Text style={styles.screenTitle}>Assessment History</Text>
           <Text style={styles.screenSubtitle}>
@@ -204,7 +208,6 @@ export default function HistoryScreen({ navigation }) {
         </View>
       </View>
 
-      <AdBanner ads={topBanners} dismissKey="records:top" />
       <AdPopup ad={popup} />
 
       {/* ── Timeline list ─────────────────────────────── */}
@@ -213,6 +216,11 @@ export default function HistoryScreen({ navigation }) {
         keyExtractor={(item) => item.date}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={{ marginBottom: Spacing.sm }}>
+            <AdBanner ads={topBanners} dismissKey="records:top" />
+          </View>
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Animated.View
@@ -324,17 +332,17 @@ export default function HistoryScreen({ navigation }) {
           transparent={false}
           onRequestClose={() => setSelectedScan(null)}
         >
-          <View style={styles.modalFullContainer}>
+          <View style={[styles.modalFullContainer, { paddingTop: topInset + Spacing.sm }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Scan Report</Text>
-              <TouchableOpacity onPress={() => setSelectedScan(null)}>
+              <TouchableOpacity onPress={() => setSelectedScan(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={26} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[styles.modalScrollContent, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
             >
               <View style={styles.modalMetaRow}>
                 <View style={styles.modalMetaCell}>

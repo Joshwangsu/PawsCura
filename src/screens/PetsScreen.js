@@ -7,18 +7,20 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
   Image,
   Animated,
   Easing,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { showAlert } from '../components/CustomAlert';
 import { useAds } from '../services/ads';
 import AdBanner from '../components/AdBanner';
 import { AdRichRotator, AdPopup } from '../components/AdRich';
@@ -33,10 +35,10 @@ const SPECIES_OPTIONS = [
 ];
 
 const PHOTO_ANGLES = [
-  { id: 'front', title: 'Front Face', desc: 'Required • Primary avatar & face matching', icon: 'person-circle-outline', required: true, scoreBonus: 70 },
-  { id: 'side', title: 'Side Profile', desc: 'Recommended • Body shape & side coat', icon: 'body-outline', required: false, scoreBonus: 15 },
-  { id: 'back', title: 'Back / Top View', desc: 'Recommended • Dorsal coat pattern', icon: 'eye-outline', required: false, scoreBonus: 9 },
-  { id: 'chest', title: 'Chest & Markings', desc: 'Optional • Underbody & unique spots', icon: 'shield-outline', required: false, scoreBonus: 4 },
+  { id: 'front', title: 'Front Face', desc: 'Front-facing head & facial area photo', icon: 'person-circle-outline' },
+  { id: 'side', title: 'Side Profile', desc: 'Side body & coat profile photo', icon: 'body-outline' },
+  { id: 'back', title: 'Back / Top View', desc: 'Dorsal / back coat area photo', icon: 'eye-outline' },
+  { id: 'chest', title: 'Chest & Markings', desc: 'Chest & underbody markings photo', icon: 'shield-outline' },
 ];
 
 const PET_ACCENT_COLORS = [
@@ -60,25 +62,14 @@ const EMPTY_FORM = {
   notes: '',
 };
 
-// PetDetailModal removed. Profile and diagnostic history details are now displayed inline using dropdown selectors.
-
-function calculateAccuracyScore(photos = []) {
-  if (!photos || photos.length === 0) return 0;
-  let score = 0;
-  PHOTO_ANGLES.forEach((angle) => {
-    if (photos.some((p) => p.angle === angle.id)) {
-      score += angle.scoreBonus;
-    }
-  });
-  return Math.min(score, 98);
-}
-
 function AddPetModal({ onClose, onAdd }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
   const [photos, setPhotos] = useState([]); // [{ angle: 'front', uri, base64, mimeType }]
-  const [step, setStep] = useState(1); // 1 = Basic, 2 = Guided Photos, 3 = Details
+  const [step, setStep] = useState(1); // 1 = Basic, 2 = Body-Part Photos, 3 = Details
 
   const updateField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -88,22 +79,21 @@ function AddPetModal({ onClose, onAdd }) {
   };
 
   const handleCaptureAngle = async (angleId) => {
-    Alert.alert(
-      'Capture Pet Angle',
-      'Select camera or gallery to capture photo for AI matching:',
+    showAlert(
+      'Upload Body-Part Photo',
+      'Select camera or gallery to capture a photo for this body-part category:',
       [
         {
           text: 'Camera',
           onPress: async () => {
             const perm = await ImagePicker.requestCameraPermissionsAsync();
             if (perm.status !== 'granted') {
-              Alert.alert('Permission Required', 'Please enable camera access in your device settings to capture pet photos.');
+              showAlert('Permission Required', 'Please enable camera access in your device settings to capture pet photos.');
               return;
             }
             const res = await ImagePicker.launchCameraAsync({
               allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.5,
+              quality: 0.9,
               base64: true,
             });
             if (!res.canceled && res.assets && res.assets.length > 0) {
@@ -129,13 +119,12 @@ function AddPetModal({ onClose, onAdd }) {
           onPress: async () => {
             const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (perm.status !== 'granted') {
-              Alert.alert('Permission Required', 'Please enable photo library access in your device settings to select pet photos.');
+              showAlert('Permission Required', 'Please enable photo library access in your device settings to select pet photos.');
               return;
             }
             const res = await ImagePicker.launchImageLibraryAsync({
               allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.5,
+              quality: 0.9,
               base64: true,
             });
             if (!res.canceled && res.assets && res.assets.length > 0) {
@@ -163,15 +152,15 @@ function AddPetModal({ onClose, onAdd }) {
 
   const handleSubmit = () => {
     if (!form.name.trim() || !selectedSpecies) {
-      Alert.alert('Missing Required Info', 'Please enter your pet\'s name and select a species.');
+      showAlert('Missing Required Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
     if (form.age && (isNaN(parseFloat(form.age)) || parseFloat(form.age) < 0 || parseFloat(form.age) > 50)) {
-      Alert.alert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
+      showAlert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
       return;
     }
     if (form.weight && (isNaN(parseFloat(form.weight)) || parseFloat(form.weight) <= 0 || parseFloat(form.weight) > 250)) {
-      Alert.alert('Invalid Weight', 'Please enter a valid weight between 0.1 and 250 kg.');
+      showAlert('Invalid Weight', 'Please enter a valid weight between 0.1 and 250 kg.');
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
@@ -193,7 +182,6 @@ function AddPetModal({ onClose, onAdd }) {
       referencePhotos: photos,
       primaryPhotoUri: frontPhoto ? frontPhoto.uri : null,
       primaryPhotoUrl: frontPhoto ? frontPhoto.uri : null,
-      accuracyScore: calculateAccuracyScore(photos),
     });
 
     setForm(EMPTY_FORM);
@@ -213,25 +201,23 @@ function AddPetModal({ onClose, onAdd }) {
     onClose();
   };
 
-  const currentScore = calculateAccuracyScore(photos);
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.fullscreenOverlay}
     >
-      <View style={styles.addModal}>
+      <View style={[styles.addModal, { paddingTop: topInset + Spacing.sm, paddingBottom: Math.max(insets.bottom, 16) }]}>
         {/* Modal Header */}
         <View style={styles.addModalHeader}>
-          <View>
+          <View style={{ flex: 1, paddingRight: 12 }}>
             <Text style={styles.addModalTitle}>
-              {step === 1 ? 'Add New Pet' : step === 2 ? 'Guided Visual Registration' : 'Additional Details'}
+              {step === 1 ? 'Add New Pet' : step === 2 ? 'Pet Photos by Body Part' : 'Additional Details'}
             </Text>
             <Text style={styles.addModalSub}>
-              {step === 1 ? 'Basic profile info' : step === 2 ? 'Photos for AI Auto-Identification' : 'Notes & health background'}
+              {step === 1 ? 'Basic profile info' : step === 2 ? 'Upload photos per body-part category' : 'Notes & health background'}
             </Text>
           </View>
-          <TouchableOpacity onPress={handleClose}>
+          <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -326,26 +312,7 @@ function AddPetModal({ onClose, onAdd }) {
 
           {step === 2 && (
             <>
-              {/* Accuracy Meter Card */}
-              <View style={styles.accuracyCard}>
-                <View style={styles.accuracyHeader}>
-                  <Ionicons name="sparkles" size={18} color={Colors.primary} />
-                  <Text style={styles.accuracyTitle}>AI Scan Accuracy</Text>
-                  <Text style={styles.accuracyPercent}>{currentScore}%</Text>
-                </View>
-                <View style={styles.accuracyBarTrack}>
-                  <View style={[styles.accuracyBarFill, { width: `${currentScore}%` }]} />
-                </View>
-                <Text style={styles.accuracySub}>
-                  {currentScore === 0
-                    ? 'Take at least 1 photo for AI auto-identification during scans.'
-                    : currentScore >= 90
-                    ? 'Excellent! High confidence pet detection enabled.'
-                    : 'Add more angles to boost recognition accuracy.'}
-                </Text>
-              </View>
-
-              {/* Guided Photo Angle Slots */}
+              {/* Guided Photo Body-Part Slots */}
               {PHOTO_ANGLES.map((angle) => {
                 const existingPhoto = photos.find((p) => p.angle === angle.id);
                 return (
@@ -357,7 +324,6 @@ function AddPetModal({ onClose, onAdd }) {
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={styles.photoSlotTitle}>{angle.title}</Text>
-                          {angle.required && <Text style={styles.requiredTag}>Required</Text>}
                         </View>
                         <Text style={styles.photoSlotDesc}>{angle.desc}</Text>
                       </View>
@@ -482,7 +448,7 @@ function AddPetModal({ onClose, onAdd }) {
             onPress={() => {
               if (step === 1) {
                 if (!form.name.trim() || !selectedSpecies) {
-                  Alert.alert('Missing Info', 'Please enter your pet\'s name and species.');
+                  showAlert('Missing Info', 'Please enter your pet\'s name and species.');
                   return;
                 }
                 setStep(2);
@@ -512,6 +478,8 @@ function AddPetModal({ onClose, onAdd }) {
 }
 
 function EditPetModal({ pet, onClose, onEdit }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [selectedColor, setSelectedColor] = useState(0);
@@ -547,22 +515,21 @@ function EditPetModal({ pet, onClose, onEdit }) {
   };
 
   const handleCaptureAngle = async (angleId) => {
-    Alert.alert(
-      'Capture Pet Angle',
-      'Select camera or gallery to capture photo for AI matching:',
+    showAlert(
+      'Upload Body-Part Photo',
+      'Select camera or gallery to capture a photo for this body-part category:',
       [
         {
           text: 'Camera',
           onPress: async () => {
             const perm = await ImagePicker.requestCameraPermissionsAsync();
             if (perm.status !== 'granted') {
-              Alert.alert('Permission Required', 'Please enable camera access in your device settings to capture pet photos.');
+              showAlert('Permission Required', 'Please enable camera access in your device settings to capture pet photos.');
               return;
             }
             const res = await ImagePicker.launchCameraAsync({
               allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.5,
+              quality: 0.9,
               base64: true,
             });
             if (!res.canceled && res.assets && res.assets.length > 0) {
@@ -588,13 +555,12 @@ function EditPetModal({ pet, onClose, onEdit }) {
           onPress: async () => {
             const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (perm.status !== 'granted') {
-              Alert.alert('Permission Required', 'Please enable photo library access in your device settings to select pet photos.');
+              showAlert('Permission Required', 'Please enable photo library access in your device settings to select pet photos.');
               return;
             }
             const res = await ImagePicker.launchImageLibraryAsync({
               allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.5,
+              quality: 0.9,
               base64: true,
             });
             if (!res.canceled && res.assets && res.assets.length > 0) {
@@ -622,15 +588,15 @@ function EditPetModal({ pet, onClose, onEdit }) {
 
   const handleSubmit = () => {
     if (!form.name.trim() || !selectedSpecies) {
-      Alert.alert('Missing Info', 'Please enter your pet\'s name and select a species.');
+      showAlert('Missing Info', 'Please enter your pet\'s name and select a species.');
       return;
     }
     if (form.age && (isNaN(parseFloat(form.age)) || parseFloat(form.age) < 0 || parseFloat(form.age) > 50)) {
-      Alert.alert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
+      showAlert('Invalid Age', 'Please enter a valid age between 0 and 50 years.');
       return;
     }
     if (form.weight && (isNaN(parseFloat(form.weight)) || parseFloat(form.weight) <= 0 || parseFloat(form.weight) > 250)) {
-      Alert.alert('Invalid Weight', 'Please enter a valid weight between 0.1 and 250 kg.');
+      showAlert('Invalid Weight', 'Please enter a valid weight between 0.1 and 250 kg.');
       return;
     }
     const colorPair = PET_ACCENT_COLORS[selectedColor];
@@ -651,22 +617,19 @@ function EditPetModal({ pet, onClose, onEdit }) {
       referencePhotos: photos,
       primaryPhotoUri: frontPhoto ? frontPhoto.uri : pet.primaryPhotoUri || null,
       primaryPhotoUrl: frontPhoto ? frontPhoto.uri : pet.primaryPhotoUrl || pet.primaryPhotoUri || null,
-      accuracyScore: calculateAccuracyScore(photos),
     });
     onClose();
   };
-
-  const currentScore = calculateAccuracyScore(photos);
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.fullscreenOverlay}
     >
-      <View style={styles.addModal}>
+      <View style={[styles.addModal, { paddingTop: topInset + Spacing.sm, paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.addModalHeader}>
           <Text style={styles.addModalTitle}>Edit Pet Profile</Text>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -804,17 +767,6 @@ function EditPetModal({ pet, onClose, onEdit }) {
             </>
           ) : (
             <>
-              <View style={styles.accuracyCard}>
-                <View style={styles.accuracyHeader}>
-                  <Ionicons name="sparkles" size={18} color={Colors.primary} />
-                  <Text style={styles.accuracyTitle}>AI Scan Accuracy</Text>
-                  <Text style={styles.accuracyPercent}>{currentScore}%</Text>
-                </View>
-                <View style={styles.accuracyBarTrack}>
-                  <View style={[styles.accuracyBarFill, { width: `${currentScore}%` }]} />
-                </View>
-              </View>
-
               {PHOTO_ANGLES.map((angle) => {
                 const existingPhoto = photos.find((p) => p.angle === angle.id);
                 return (
@@ -879,10 +831,12 @@ function EditPetModal({ pet, onClose, onEdit }) {
 }
 
 export default function PetsScreen({ route }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { pets, addPet, deletePet, updatePet, healthLogs } = useHealth();
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
-  const { topBanners, bottomBanners, richInline, popup } = useAds('pets');
+  const { topBanners, richInline, popup } = useAds('pets');
   const [selectedPet, setSelectedPet] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -941,7 +895,7 @@ export default function PetsScreen({ route }) {
   };
 
   const handleDeletePet = (id) => {
-    Alert.alert(
+    showAlert(
       'Remove Pet',
       'Are you sure you want to remove this pet?',
       [
@@ -965,7 +919,7 @@ export default function PetsScreen({ route }) {
         colors={[Colors.primary, Colors.primaryLight]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: topInset + Spacing.md }]}
       >
         <View style={styles.headerRow}>
           <View>
@@ -993,14 +947,15 @@ export default function PetsScreen({ route }) {
         </View>
       </LinearGradient>
 
-      <AdBanner ads={topBanners} dismissKey="pets:top" />
-
       {/* Pet Dashboard Content */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginHorizontal: -Spacing.md, marginBottom: Spacing.sm }}>
+          <AdBanner ads={topBanners} dismissKey="pets:top" />
+        </View>
         {pets.length === 0 ? (
           <View style={styles.emptyState}>
             <Animated.View
@@ -1196,7 +1151,6 @@ export default function PetsScreen({ route }) {
           </>
         )}
         <AdRichRotator ads={richInline} />
-        <AdBanner ads={bottomBanners} dismissKey="pets:bottom" />
       </ScrollView>
 
       <AdPopup ad={popup} />
@@ -1208,7 +1162,7 @@ export default function PetsScreen({ route }) {
           activeOpacity={1} 
           onPress={() => setShowDropdown(false)}
         >
-          <View style={styles.dropdownSheet}>
+          <View style={[styles.dropdownSheet, { paddingBottom: Math.max(insets.bottom + 12, 30) }]}>
             <View style={styles.dropdownHeader}>
               <Text style={styles.dropdownTitle}>Select Pet Profile</Text>
               <TouchableOpacity onPress={() => setShowDropdown(false)}>
@@ -1606,7 +1560,7 @@ const styles = StyleSheet.create({
   addModal: {
     backgroundColor: Colors.card,
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingTop: Platform.OS === 'ios' ? 44 : 28,
     paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   addModalHeader: {
@@ -1625,49 +1579,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
-  },
-  accuracyCard: {
-    backgroundColor: '#F3D9BF',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-  },
-  accuracyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  accuracyTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.primary,
-    flex: 1,
-    marginLeft: 6,
-  },
-  accuracyPercent: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: Colors.primaryDark,
-  },
-  accuracyBarTrack: {
-    height: 8,
-    backgroundColor: '#DBEAFE',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  accuracyBarFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 4,
-  },
-  accuracySub: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 16,
   },
   photoSlotCard: {
     backgroundColor: Colors.background,

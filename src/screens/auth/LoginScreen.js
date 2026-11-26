@@ -10,16 +10,20 @@ import {
   Platform,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Alert,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../services/firebaseConfig';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
+import { showAlert } from '../../components/CustomAlert';
 
 export default function LoginScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -88,7 +92,11 @@ export default function LoginScreen({ navigation }) {
     
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      Alert.alert('Reset Email Sent', 'Check your inbox for further instructions.');
+      showAlert({
+        title: 'Reset Email Sent',
+        message: 'Check your inbox for further instructions.',
+        type: 'success',
+      });
     } catch (error) {
       let errorMsg = 'Failed to send reset email.';
       if (error.code === 'auth/user-not-found') {
@@ -96,7 +104,7 @@ export default function LoginScreen({ navigation }) {
       } else if (error.code === 'auth/invalid-email') {
         errorMsg = 'Invalid email address.';
       }
-      Alert.alert('Error', errorMsg);
+      showAlert({ title: 'Error', message: errorMsg, type: 'error' });
     }
   };
 
@@ -112,7 +120,7 @@ export default function LoginScreen({ navigation }) {
         style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topInset + Spacing.md, paddingBottom: Math.max(insets.bottom + 16, 36) }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >

@@ -10,8 +10,9 @@ import {
   Platform,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Alert,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
@@ -19,8 +20,11 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../services/firebaseConfig';
 import { useAuth } from '../../context/AuthContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
+import { showAlert } from '../../components/CustomAlert';
 
 export default function SignupScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { reloadUser, setIsSigningUp } = useAuth();
   const [form, setForm] = useState({
     firstName: '',
@@ -145,13 +149,14 @@ export default function SignupScreen({ navigation }) {
       // Immediately sign them out so they aren't auto-logged in
       await signOut(auth);
 
-      Alert.alert(
-        "Registration Successful",
-        "Your account has been created successfully! Please log in with your credentials.",
-        [
-          { text: "OK", onPress: () => navigation.navigate("Login") }
-        ]
-      );
+      showAlert({
+        title: 'Registration Successful',
+        message: 'Your account has been created successfully! Please log in with your credentials.',
+        type: 'success',
+        buttons: [
+          { text: 'OK', style: 'default', onPress: () => navigation.navigate('Login') },
+        ],
+      });
     } catch (error) {
       let errorMsg = 'Failed to create account. Please try again.';
       if (error.code === 'auth/email-already-in-use') {
@@ -223,7 +228,7 @@ export default function SignupScreen({ navigation }) {
         style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topInset + Spacing.md, paddingBottom: Math.max(insets.bottom + 16, 40) }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -421,10 +426,11 @@ export default function SignupScreen({ navigation }) {
                 <Text
                   style={styles.termsLink}
                   onPress={() =>
-                    Alert.alert(
-                      'Terms of Service',
-                      'PawsCura provides AI-assisted pet health assessments for informational purposes only and is not a substitute for professional veterinary diagnosis or treatment.'
-                    )
+                    showAlert({
+                      title: 'Terms of Service',
+                      message: 'PawsCura provides AI-assisted pet health assessments for informational purposes only and is not a substitute for professional veterinary diagnosis or treatment.',
+                      type: 'info',
+                    })
                   }
                 >
                   Terms of Service
@@ -433,10 +439,11 @@ export default function SignupScreen({ navigation }) {
                 <Text
                   style={styles.termsLink}
                   onPress={() =>
-                    Alert.alert(
-                      'Privacy Policy',
-                      'Your pet profiles, uploaded photos, and diagnostic history are securely stored in your private account and used solely to personalize your PawsCura veterinary experience.'
-                    )
+                    showAlert({
+                      title: 'Privacy Policy',
+                      message: 'Your pet profiles, uploaded photos, and diagnostic history are securely stored in your private account and used solely to personalize your PawsCura veterinary experience.',
+                      type: 'info',
+                    })
                   }
                 >
                   Privacy Policy

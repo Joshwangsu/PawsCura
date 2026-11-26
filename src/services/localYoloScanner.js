@@ -3,9 +3,9 @@
  *
  * Implements:
  *  1. 18 Unified YOLOv11 Symptom Classes (BEST_PT_CLASSES) & Intrinsic Severity Weights
- *  2. Hardcoded Clinical Severity Scorer (Mild / Moderate / Severe -> mapped to Safe / Mild / Moderate / Urgent)
+ *  2. Clinical Severity Scorer (None / Mild / Moderate / Severe -> Safe / Mild / Moderate / Urgent)
  *  3. 26-Disease Veterinary Differential Classifier with Co-Occurrence Synergy Bonuses
- *  4. Direct client connection to PawsCura AI Server (`POST /predict/base64`) running `best.pt` (`best final.pt`)
+ *  4. On-device YOLOv11m inference via native NCNN module (`modules/yolo-ncnn`)
  */
 
 // ── 1. The 18 Unified YOLOv11m Symptom Classes (0..17) ───────────────────────
@@ -591,10 +591,7 @@ export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', reg
     detections = extractOnDeviceSymptomDetections(base64Image);
   }
 
-  // 2. Evaluate Clinical Severity Scorer
   const sevInfo = evaluateClinicalSeverity(detections);
-
-  // 3. Evaluate 26-Disease Differential Synergy Matrix
   const diseases = predictClinicalDiseases(detections, 5);
 
   const lvl = (sevInfo.level || 'None').toLowerCase();
@@ -610,7 +607,7 @@ export async function runLocalYoloScan(base64Image, mimeType = 'image/jpeg', reg
       matchedPetId: firstPet ? firstPet.id : null,
       matchedPetName: firstPet ? firstPet.name : null,
       matchConfidence: firstPet ? 94 : 0,
-      suspectedCondition: 'No Visible Abnormality Detected',
+      suspectedCondition: 'No Visible Anomaly Detected',
       confidence: 95.0,
       urgencyLevel: 'Safe',
       severityLevel: 'Safe',
@@ -693,7 +690,6 @@ function extractOnDeviceSymptomDetections(base64Image) {
     return [];
   }
 
-  // Strip data URI header if present
   const raw = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   const len = raw.length;
 

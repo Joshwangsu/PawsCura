@@ -85,6 +85,8 @@ Java_com_pawscura_yoloncnn_YoloNcnnModule_initModel(JNIEnv* env, jobject thiz, j
     // - use_fp16_arithmetic = false (avoids SIGILL on older ARM/x86 CPUs without FP16 ISA)
     g_yolo.opt.use_vulkan_compute = false;
     g_yolo.opt.lightmode = true;
+    g_yolo.opt.use_winograd_convolution = false;
+    g_yolo.opt.use_sgemm_convolution = false;
     g_yolo.opt.use_packing_layout = true;
     g_yolo.opt.use_fp16_packed = true;
     g_yolo.opt.use_fp16_storage = true;

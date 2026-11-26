@@ -8,8 +8,10 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signOut, updateProfile } from 'firebase/auth';
@@ -18,22 +20,88 @@ import { auth, db } from '../services/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
+import { showAlert } from '../components/CustomAlert';
 
 export default function SettingsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { user, reloadUser } = useAuth();
-  const { isPremium } = useSubscription();
+  const { isPremium, subscriptionStatus, subscriptionEndDate, cancelSubscription } = useSubscription();
 
   const [settingsName, setSettingsName] = useState(user?.displayName || '');
   const [settingsEmail, setSettingsEmail] = useState(user?.email || '');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isCancellingSub, setIsCancellingSub] = useState(false);
 
   const displayName = user?.displayName || 'User';
   const initial = displayName.charAt(0).toUpperCase();
+  const isCancelledWithAccess = Boolean(
+    isPremium && subscriptionStatus === 'cancelled' && subscriptionEndDate
+  );
+
+  const formatSubDate = (d) => {
+    if (!d) return '';
+    try {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return '';
+    }
+  };
+
+  const handleCancelSubscription = () => {
+    if (isCancelledWithAccess) {
+      showAlert({
+        title: 'Already Cancelled',
+        message: `Auto-renewal is disabled. Your Premium features remain active until ${formatSubDate(subscriptionEndDate)}.`,
+        type: 'info',
+      });
+      return;
+    }
+    const periodNote =
+      subscriptionEndDate && subscriptionEndDate.getTime() > Date.now()
+        ? `Auto-renewal will be disabled and your Premium features will stay active until ${formatSubDate(subscriptionEndDate)}.`
+        : 'You will be reverted to the Free plan immediately.';
+    showAlert({
+      title: 'Cancel Subscription?',
+      message: `Are you sure you want to cancel your PawsCura Premium membership? ${periodNote}`,
+      type: 'confirm',
+      buttons: [
+        { text: 'Keep Premium', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancellingSub(true);
+            try {
+              const res = await cancelSubscription();
+              const msg = res?.retainsAccessUntil
+                ? `Auto-renewal has been cancelled. Your Premium access remains active until ${formatSubDate(res.retainsAccessUntil)}.`
+                : 'Your Premium subscription has been cancelled and your account is now on the Free plan.';
+              showAlert({
+                title: 'Subscription Cancelled',
+                message: msg,
+                type: 'success',
+              });
+            } catch (err) {
+              console.error('Cancel subscription error:', err);
+              showAlert({
+                title: 'Cancellation Failed',
+                message: err?.message || 'Unable to cancel subscription right now. Please try again.',
+                type: 'error',
+              });
+            } finally {
+              setIsCancellingSub(false);
+            }
+          },
+        },
+      ],
+    });
+  };
 
   const handleSaveSettings = async () => {
     const trimmedName = settingsName.trim();
     if (!trimmedName) {
-      Alert.alert('Error', 'Display Name cannot be empty.');
+      showAlert({ title: 'Error', message: 'Display Name cannot be empty.', type: 'error' });
       return;
     }
     setIsSavingSettings(true);
@@ -56,20 +124,21 @@ export default function SettingsScreen({ navigation }) {
         email: settingsEmail.trim()
       }, { merge: true });
 
-      Alert.alert('Success', 'Your profile settings have been updated!');
+      showAlert({ title: 'Success', message: 'Your profile settings have been updated!', type: 'success' });
     } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert('Error', 'Failed to update profile settings.');
+      showAlert({ title: 'Error', message: 'Failed to update profile settings.', type: 'error' });
     } finally {
       setIsSavingSettings(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of PawsCura?',
-      [
+    showAlert({
+      title: 'Log Out',
+      message: 'Are you sure you want to log out of PawsCura?',
+      type: 'confirm',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Log Out',
@@ -83,7 +152,7 @@ export default function SettingsScreen({ navigation }) {
           }
         }
       ]
-    );
+    });
   };
 
   return (
@@ -96,7 +165,7 @@ export default function SettingsScreen({ navigation }) {
         colors={[Colors.primary, Colors.primaryLight]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: topInset + Spacing.md }]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity 
@@ -192,16 +261,31 @@ export default function SettingsScreen({ navigation }) {
               <View style={styles.membershipInner}>
                 <Ionicons name="sparkles" size={24} color="#F59E0B" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.membershipTitleActive}>PawsCura Premium Active</Text>
-                  <Text style={styles.membershipSubActive}>Enjoy unlimited scans, diagnostics, and chats.</Text>
+                  <Text style={styles.membershipTitleActive}>
+                    {isCancelledWithAccess ? 'Premium Cancelled' : 'PawsCura Premium Active'}
+                  </Text>
+                  <Text style={styles.membershipSubActive}>
+                    {isCancelledWithAccess
+                      ? `Access continues until ${formatSubDate(subscriptionEndDate)} (auto-renew off).`
+                      : 'Enjoy unlimited scans, diagnostics, and chats.'}
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity
-                style={styles.membershipBtnCancel}
-                onPress={() => navigation.navigate('Paywall')}
+                style={[styles.membershipBtnCancel, isCancelledWithAccess && { opacity: 0.65 }]}
+                onPress={handleCancelSubscription}
+                disabled={isCancellingSub || isCancelledWithAccess}
                 activeOpacity={0.8}
               >
-                <Text style={styles.membershipBtnCancelText}>Cancel Subscription</Text>
+                {isCancellingSub ? (
+                  <ActivityIndicator size="small" color="#FCA5A5" />
+                ) : (
+                  <Text style={styles.membershipBtnCancelText}>
+                    {isCancelledWithAccess
+                      ? `Ends ${formatSubDate(subscriptionEndDate)}`
+                      : 'Cancel Subscription'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </LinearGradient>
           ) : (
@@ -214,8 +298,12 @@ export default function SettingsScreen({ navigation }) {
               <View style={styles.membershipInner}>
                 <Ionicons name="star" size={24} color="#fff" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.membershipTitleFree}>Upgrade to Premium</Text>
-                  <Text style={styles.membershipSubFree}>Unlock multiple pets, saving diagnostics, and history.</Text>
+                  <Text style={styles.membershipTitleFree}>
+                    Upgrade to Premium
+                  </Text>
+                  <Text style={styles.membershipSubFree}>
+                    Unlock multiple pets, saving diagnostics, and history.
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity
@@ -223,7 +311,9 @@ export default function SettingsScreen({ navigation }) {
                 onPress={() => navigation.navigate('Paywall')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.membershipBtnUpgradeText}>Subscribe ($9.99/mo)</Text>
+                <Text style={styles.membershipBtnUpgradeText}>
+                  Subscribe ($9.99/mo)
+                </Text>
               </TouchableOpacity>
             </LinearGradient>
           )}

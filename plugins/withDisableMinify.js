@@ -1,4 +1,4 @@
-const { withGradleProperties, withAppBuildGradle } = require('expo/config-plugins');
+const { withGradleProperties, withAppBuildGradle, withAndroidManifest } = require('expo/config-plugins');
 
 module.exports = function withDisableMinify(config) {
   config = withGradleProperties(config, (config) => {
@@ -17,6 +17,9 @@ module.exports = function withDisableMinify(config) {
     setProp('android.enableMinifyInReleaseBuilds', 'false');
     setProp('android.enableShrinkResourcesInReleaseBuilds', 'false');
 
+    // Exclude unused 32-bit x86 architecture (~20 MB saved) while keeping arm64-v8a, armeabi-v7a, x86_64
+    setProp('reactNativeArchitectures', 'arm64-v8a,armeabi-v7a,x86_64');
+
     return config;
   });
 
@@ -32,6 +35,15 @@ module.exports = function withDisableMinify(config) {
         );
         config.modResults.contents = contents;
       }
+    }
+    return config;
+  });
+
+  // Enable android:largeHeap="true" so mid-range Android devices allow sufficient RAM for YOLOv11m NCNN
+  config = withAndroidManifest(config, (config) => {
+    const app = config.modResults.manifest?.application?.[0];
+    if (app && app.$) {
+      app.$['android:largeHeap'] = 'true';
     }
     return config;
   });

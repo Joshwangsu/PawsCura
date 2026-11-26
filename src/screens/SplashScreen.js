@@ -4,27 +4,27 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
+  Easing,
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
-
-const { width } = Dimensions.get('window');
 
 export default function SplashScreen({ onFinish }) {
   const containerOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
-  const logoTranslateY = useRef(new Animated.Value(10)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const logoTranslateY = useRef(new Animated.Value(12)).current;
+  const waveRotate = useRef(new Animated.Value(0)).current;
+  const waveHop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Fast, crisp entrance animation
+    // 1. Smooth entrance
     Animated.parallel([
       Animated.timing(contentOpacity, {
         toValue: 1,
         duration: 300,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
@@ -36,23 +36,56 @@ export default function SplashScreen({ onFinish }) {
       Animated.timing(logoTranslateY, {
         toValue: 0,
         duration: 300,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Quickly fade out the entire splash overlay once ready
+    // 2. Subtle, natural welcoming wave on the Login puppy without distorting the PNG
+    const oneWave = Animated.parallel([
+      Animated.sequence([
+        Animated.timing(waveRotate, { toValue: -1, duration: 130, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveRotate, { toValue: 1, duration: 150, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveRotate, { toValue: -0.8, duration: 130, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveRotate, { toValue: 0, duration: 120, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(waveHop, { toValue: -5, duration: 130, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveHop, { toValue: 0, duration: 150, easing: Easing.in(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveHop, { toValue: -3, duration: 130, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveHop, { toValue: 0, duration: 120, easing: Easing.in(Easing.sin), useNativeDriver: true }),
+      ]),
+    ]);
+
+    const waveAnim = Animated.sequence([
+      Animated.delay(180),
+      oneWave,
+      oneWave,
+    ]);
+    waveAnim.start();
+
+    // 3. Smooth fade-out transition into Login / Main screen
     const timer = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
-        duration: 250,
+        duration: 280,
+        easing: Easing.inOut(Easing.ease),
         useNativeDriver: true,
       }).start(() => {
         if (onFinish) onFinish();
       });
-    }, 650);
+    }, 1350);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      waveAnim.stop();
+    };
   }, []);
+
+  const rotateInterpolate = waveRotate.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-5deg', '0deg', '4.5deg'],
+  });
 
   return (
     <Animated.View
@@ -77,9 +110,27 @@ export default function SplashScreen({ onFinish }) {
             },
           ]}
         >
+          <Animated.View
+            style={[
+              styles.mascotFrame,
+              {
+                transform: [
+                  { translateY: waveHop },
+                  { rotate: rotateInterpolate },
+                ],
+              },
+            ]}
+          >
+            <Image
+              source={require('../../assets/Login.png')}
+              style={styles.mascotImage}
+              resizeMode="contain"
+            />
+          </Animated.View>
+
           <Image
-            source={require('../../assets/splash-logo.png')}
-            style={styles.logoImage}
+            source={require('../../assets/logo-horizontal.png')}
+            style={styles.brandWordmark}
             resizeMode="contain"
           />
 
@@ -112,10 +163,25 @@ const styles = StyleSheet.create({
   brandBox: {
     alignItems: 'center',
   },
-  logoImage: {
-    width: 220,
-    height: 220,
-    marginBottom: 8,
+  mascotFrame: {
+    width: 196,
+    height: 196,
+    borderRadius: 98,
+    backgroundColor: 'rgba(255, 253, 249, 0.72)',
+    borderWidth: 2,
+    borderColor: 'rgba(216, 141, 89, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  mascotImage: {
+    width: 168,
+    height: 168,
+  },
+  brandWordmark: {
+    width: 175,
+    height: 44,
+    marginBottom: 4,
   },
   taglineBadge: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,10 @@ import {
   Modal,
   ScrollView,
   Platform,
+  AppState,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import InteractiveClinicMap from '../components/InteractiveClinicMap';
@@ -21,46 +24,90 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 import { useAds } from '../services/ads';
 import AdBanner from '../components/AdBanner';
 import { useSubscription } from '../context/SubscriptionContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function ClinicScreen() {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { topBanners } = useAds('clinics');
   const { isPremium } = useSubscription();
   const navigation = useNavigation();
   const [location, setLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('loading'); // 'loading' | 'granted' | 'services_disabled' | 'permission_denied'
   const [errorMsg, setErrorMsg] = useState(null);
   const [clinics, setClinics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClinic, setSelectedClinic] = useState(null);
   const [detailClinic, setDetailClinic] = useState(null);
   const [routeCoords, setRouteCoords] = useState([]);
-  const mapRef = useRef(null);
+  const isFetchingLocRef = useRef(false);
+  const hasRealLocationRef = useRef(false);
 
-  const loadLocation = async () => {
-    setLoading(true);
+  const loadLocation = useCallback(async ({ silent = false } = {}) => {
+    if (isFetchingLocRef.current) return;
+    isFetchingLocRef.current = true;
+
+    if (!silent) {
+      setLoading(true);
+    }
     setErrorMsg(null);
-    let lat = 14.5995; // Default: Manila
+    let lat = 14.5995; // Default: Manila fallback
     let lng = 120.9842;
 
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocation({ coords: { latitude: lat, longitude: lng } });
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== 'granted' && !silent) {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (perm.status !== 'granted') {
+        setLocationStatus('permission_denied');
+        if (!hasRealLocationRef.current) {
+          setLocation({ coords: { latitude: lat, longitude: lng } });
+        }
       } else {
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (loc && loc.coords) {
-          setLocation(loc);
-          lat = loc.coords.latitude;
-          lng = loc.coords.longitude;
+        const servicesEnabled = await Location.hasServicesEnabledAsync().catch(() => true);
+        if (!servicesEnabled) {
+          setLocationStatus('services_disabled');
+          if (!hasRealLocationRef.current) {
+            setLocation({ coords: { latitude: lat, longitude: lng } });
+          }
+        } else {
+          // Services are enabled & permission granted — fetch fresh GPS location
+          setLocationStatus('granted');
+          let loc = await Location.getLastKnownPositionAsync().catch(() => null);
+          if (loc?.coords) {
+            lat = loc.coords.latitude;
+            lng = loc.coords.longitude;
+            hasRealLocationRef.current = true;
+            setLocation(loc);
+          }
+
+          try {
+            const fresh = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            if (fresh?.coords) {
+              lat = fresh.coords.latitude;
+              lng = fresh.coords.longitude;
+              hasRealLocationRef.current = true;
+              setLocation(fresh);
+            }
+          } catch (posErr) {
+            console.log('Current position warning:', posErr?.message);
+            if (!hasRealLocationRef.current) {
+              setLocation({ coords: { latitude: lat, longitude: lng } });
+            }
+          }
         }
       }
     } catch (err) {
-      console.log('Location error — using Manila default:', err.message);
-      setLocation({ coords: { latitude: lat, longitude: lng } });
+      console.log('Location error — using fallback:', err.message);
+      if (!hasRealLocationRef.current) {
+        setLocation({ coords: { latitude: lat, longitude: lng } });
+      }
     }
 
     try {
@@ -71,12 +118,48 @@ export default function ClinicScreen() {
       setErrorMsg('Could not load clinic directory. Please try again.');
     } finally {
       setLoading(false);
+      isFetchingLocRef.current = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadLocation();
-  }, []);
+    loadLocation({ silent: false });
+  }, [loadLocation]);
+
+  // Refresh location automatically when app returns to foreground (e.g., after toggling GPS in Settings)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        loadLocation({ silent: true });
+      }
+    });
+    return () => subscription?.remove?.();
+  }, [loadLocation]);
+
+  // Refresh when user navigates back to the Clinics tab
+  useFocusEffect(
+    useCallback(() => {
+      loadLocation({ silent: true });
+    }, [loadLocation])
+  );
+
+  // While GPS is disabled or permission is denied, watch for status change without requiring app restart
+  useEffect(() => {
+    if (locationStatus !== 'services_disabled' && locationStatus !== 'permission_denied') {
+      return undefined;
+    }
+    const poll = setInterval(async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== 'granted') return;
+        const enabled = await Location.hasServicesEnabledAsync();
+        if (enabled) {
+          loadLocation({ silent: false });
+        }
+      } catch (_) {}
+    }, 2500);
+    return () => clearInterval(poll);
+  }, [locationStatus, loadLocation]);
 
   const filtered = isPremium ? clinics : clinics.slice(0, 3);
 
@@ -132,14 +215,45 @@ export default function ClinicScreen() {
   return (
     <View style={styles.safe}>
       {/* ── Top Header ── */}
-      <View style={styles.topHeader}>
-        <View>
+      <View style={[styles.topHeader, { paddingTop: topInset + Spacing.sm }]}>
+        <View style={{ flex: 1 }}>
           <Text style={styles.screenTitle}>Find Clinics</Text>
           <Text style={styles.screenSubtitle}>
             {filtered.length} veterinary clinics nearby
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={() => loadLocation({ silent: false })}
+          style={styles.refreshLocBtn}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="refresh" size={18} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
+
+      {/* Location disabled / permission banner */}
+      {(locationStatus === 'services_disabled' || locationStatus === 'permission_denied') && (
+        <View style={styles.locationWarningBanner}>
+          <Ionicons name="location-outline" size={16} color="#92400E" />
+          <Text style={styles.locationWarningText} numberOfLines={2}>
+            {locationStatus === 'services_disabled'
+              ? 'Location services are off. Enable GPS to center on your location.'
+              : 'Location permission denied. Enable access in settings for nearby clinics.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.locationRetryBtn}
+            onPress={() =>
+              locationStatus === 'permission_denied'
+                ? Linking.openSettings?.().catch(() => {})
+                : loadLocation({ silent: false })
+            }
+          >
+            <Text style={styles.locationRetryText}>
+              {locationStatus === 'permission_denied' ? 'Settings' : 'Refresh'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Active Route Banner */}
       {selectedClinic && (
@@ -162,6 +276,7 @@ export default function ClinicScreen() {
             routeCoords={selectedClinic ? routeCoords : []}
             selectedClinic={selectedClinic}
             onPressClinic={(clinic) => setDetailClinic(clinic)}
+            onRefreshLocation={() => loadLocation({ silent: false })}
           />
         ) : (
           <View style={styles.mapBg}>
@@ -187,13 +302,7 @@ export default function ClinicScreen() {
         </View>
       )}
 
-      <AdBanner ads={topBanners} dismissKey="clinics:top" />
-
       {/* ── Clinic List ── */}
-      <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>Nearby Clinics</Text>
-      </View>
-
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -209,6 +318,14 @@ export default function ClinicScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            <>
+              <AdBanner ads={topBanners} dismissKey="clinics:top" />
+              <View style={styles.listHeader}>
+                <Text style={styles.listTitle}>Nearby Clinics</Text>
+              </View>
+            </>
+          }
           renderItem={({ item }) => (
             <ClinicCard
               clinic={item}
@@ -236,7 +353,7 @@ export default function ClinicScreen() {
           transparent={false}
           onRequestClose={() => setDetailClinic(null)}
         >
-          <View style={styles.detailModalContainer}>
+          <View style={[styles.detailModalContainer, { paddingTop: topInset }]}>
             {/* Header */}
             <View style={styles.detailHeader}>
               <TouchableOpacity style={styles.detailBackBtn} onPress={() => setDetailClinic(null)} activeOpacity={0.7}>
@@ -389,7 +506,7 @@ export default function ClinicScreen() {
             </ScrollView>
 
             {/* Footer */}
-            <View style={styles.detailFooterActions}>
+            <View style={[styles.detailFooterActions, { paddingBottom: Math.max(insets.bottom + 8, Spacing.md) }]}>
               <TouchableOpacity
                 style={styles.detailRouteBtn}
                 onPress={() => { handleNavigate(detailClinic); setDetailClinic(null); }}
@@ -419,6 +536,47 @@ const styles = StyleSheet.create({
   },
   screenTitle: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
   screenSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  refreshLocBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+  locationWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  locationWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  locationRetryBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  locationRetryText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   filterBtn: { padding: Spacing.sm, backgroundColor: Colors.primaryBg, borderRadius: BorderRadius.md },
 
   routeActiveBanner: {

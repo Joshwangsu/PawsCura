@@ -6,8 +6,10 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
-  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
@@ -15,15 +17,17 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../../theme/colors';
 const { width } = Dimensions.get('window');
 
 export default function WelcomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
+
   return (
     <LinearGradient
       colors={['#FFF8F1', '#F3D9BF', '#794B35']}
       locations={[0, 0.45, 1]}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.content}>
-          {/* Brand Logo (Logo with name under.png) */}
+      <View style={styles.safeArea}>
+        <View style={[styles.content, { paddingTop: topInset + Spacing.md, paddingBottom: Math.max(insets.bottom + 8, Spacing.lg) }]}>
           <View style={styles.heroContainer}>
             <Image
               source={require('../../../assets/splash-logo.png')}
@@ -32,7 +36,6 @@ export default function WelcomeScreen({ navigation }) {
             />
           </View>
 
-          {/* Features Highlight */}
           <View style={styles.featuresContainer}>
             <View style={styles.featureItem}>
               <View style={styles.iconContainer}>
@@ -65,9 +68,7 @@ export default function WelcomeScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.buttonContainer}>
-            {/* Get Started / Signup */}
             <TouchableOpacity
               style={styles.primaryBtn}
               onPress={() => navigation.navigate('Signup')}
@@ -84,7 +85,6 @@ export default function WelcomeScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Log In */}
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => navigation.navigate('Login')}
@@ -94,7 +94,7 @@ export default function WelcomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }

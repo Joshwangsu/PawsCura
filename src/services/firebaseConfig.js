@@ -13,10 +13,9 @@ const firebaseConfig = {
   measurementId: "G-L85D17LS3C"
 };
 
-// Initialize Firebase
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firebase Auth with Async Storage persistence (safe against Fast Refresh)
+// AsyncStorage persistence survives Fast Refresh without throwing duplicate-init errors
 let auth;
 try {
   auth = initializeAuth(app, {

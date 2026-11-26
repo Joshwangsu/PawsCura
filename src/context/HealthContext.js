@@ -1,8 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { Alert } from 'react-native';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 import { useAuth } from './AuthContext';
+import { showAlert } from '../components/CustomAlert';
 
 const HealthContext = createContext();
 
@@ -143,7 +143,7 @@ export const HealthProvider = ({ children }) => {
       });
     } catch (error) {
       console.error("Error adding pet: ", error);
-      Alert.alert('Save Error', 'Failed to save pet profile. Please try again.');
+      showAlert({ title: 'Save Error', message: 'Failed to save pet profile. Please try again.', type: 'error' });
       throw error;
     }
   };

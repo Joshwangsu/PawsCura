@@ -6,8 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Image
+  Image,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import PetCard from '../components/PetCard';
@@ -19,6 +22,8 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
 
 
 export default function HomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
   const { pets, healthLogs } = useHealth();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
@@ -48,7 +53,7 @@ export default function HomeScreen({ navigation }) {
           colors={[Colors.primary, Colors.primaryLight]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.header}
+          style={[styles.header, { paddingTop: topInset + Spacing.lg }]}
         >
           <View style={styles.headerInner}>
             <View style={styles.headerLeft}>
