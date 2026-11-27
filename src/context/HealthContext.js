@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 import { useAuth } from './AuthContext';
 import { showAlert } from '../components/CustomAlert';
@@ -10,13 +10,17 @@ export const useHealth = () => useContext(HealthContext);
 
 export const HealthProvider = ({ children }) => {
   const [pets, setPets] = useState([]);
+  const [petPhotos, setPetPhotos] = useState([]);
   const [healthLogs, setHealthLogs] = useState([]);
+  const [detectedAnomalies, setDetectedAnomalies] = useState([]);
   const { user } = useAuth();
 
   useEffect(() => {
     if (!user) {
       setPets([]);
+      setPetPhotos([]);
       setHealthLogs([]);
+      setDetectedAnomalies([]);
       return;
     }
 
@@ -32,6 +36,13 @@ export const HealthProvider = ({ children }) => {
       setPets(petsData);
     }, (err) => {
       console.warn('Pets snapshot error:', err?.message);
+    });
+
+    const qPhotos = query(collection(db, 'petPhotos'), where('userId', '==', user.uid));
+    const unsubPhotos = onSnapshot(qPhotos, (snapshot) => {
+      setPetPhotos(snapshot.docs.map((d) => ({ ...d.data(), id: d.id, petPhotosId: d.id })));
+    }, (err) => {
+      console.warn('PetPhotos snapshot error:', err?.message);
     });
 
     const qLogs = query(collection(db, 'healthRecords'), where('userId', '==', user.uid));
@@ -62,9 +73,18 @@ export const HealthProvider = ({ children }) => {
       console.warn('HealthLogs snapshot error:', err?.message);
     });
 
+    const qAnomalies = query(collection(db, 'detectedAnomalies'), where('userId', '==', user.uid));
+    const unsubAnomalies = onSnapshot(qAnomalies, (snapshot) => {
+      setDetectedAnomalies(snapshot.docs.map((d) => ({ ...d.data(), id: d.id, detectedAnomalyId: d.id })));
+    }, (err) => {
+      console.warn('DetectedAnomalies snapshot error:', err?.message);
+    });
+
     return () => {
       unsubPets();
+      unsubPhotos();
       unsubLogs();
+      unsubAnomalies();
     };
   }, [user]);
 
@@ -78,6 +98,58 @@ export const HealthProvider = ({ children }) => {
     return clean;
   };
 
+  const deletePetPhotosForPet = async (petId) => {
+    if (!user || !petId) return;
+    const q = query(collection(db, 'petPhotos'), where('userId', '==', user.uid));
+    const snap = await getDocs(q);
+    await Promise.all(
+      snap.docs
+        .filter((d) => d.data().petId === petId)
+        .map((d) => deleteDoc(d.ref))
+    );
+  };
+
+  const syncPetPhotosCollection = async (petId, photos = []) => {
+    if (!user || !petId) return;
+    try {
+      await deletePetPhotosForPet(petId);
+      if (!Array.isArray(photos) || photos.length === 0) return;
+      await Promise.all(
+        photos.map((p) =>
+          addDoc(collection(db, 'petPhotos'), {
+            petId,
+            userId: user.uid,
+            imageUrl: p.imageUrl || p.uri || '',
+            angle: p.angle || 'front',
+            createdAt: serverTimestamp(),
+          })
+        )
+      );
+    } catch (err) {
+      console.warn('Failed syncing petPhotos collection:', err?.message);
+    }
+  };
+
+  const syncDetectedAnomaliesCollection = async (assessmentRecordId, petId, anomalies = []) => {
+    if (!user || !assessmentRecordId || !Array.isArray(anomalies) || anomalies.length === 0) return;
+    try {
+      await Promise.all(
+        anomalies.map((item) =>
+          addDoc(collection(db, 'detectedAnomalies'), {
+            assessmentRecordId,
+            userId: user.uid,
+            petId: petId || null,
+            name: typeof item === 'string' ? item : (item.name || item.condition || 'Unspecified Anomaly'),
+            confidence: typeof item === 'object' ? (item.confidence ?? null) : null,
+            createdAt: serverTimestamp(),
+          })
+        )
+      );
+    } catch (err) {
+      console.warn('Failed writing detectedAnomalies collection:', err?.message);
+    }
+  };
+
   const addHealthLog = async (newLog) => {
     if (!user) return;
     try {
@@ -86,6 +158,7 @@ export const HealthProvider = ({ children }) => {
         userId: user.uid,
         date: serverTimestamp()
       });
+      await syncDetectedAnomaliesCollection(docRef.id, newLog.petId, newLog.detectedAnomalies);
       return docRef;
     } catch (error) {
       console.error("Error adding health record: ", error);
@@ -129,7 +202,7 @@ export const HealthProvider = ({ children }) => {
     if (!user) return;
     try {
       const sanitizedPhotos = newPet.referencePhotos ? sanitizeReferencePhotos(newPet.referencePhotos) : [];
-      await addDoc(collection(db, 'pets'), {
+      const petDocRef = await addDoc(collection(db, 'pets'), {
         ...sanitizeForFirestore(newPet),
         referencePhotos: sanitizedPhotos,
         age: parseNumericField(newPet.age),
@@ -137,6 +210,7 @@ export const HealthProvider = ({ children }) => {
         userId: user.uid,
         createdAt: serverTimestamp()
       });
+      await syncPetPhotosCollection(petDocRef.id, sanitizedPhotos);
     } catch (error) {
       console.error("Error adding pet: ", error);
       showAlert({ title: 'Save Error', message: 'Failed to save pet profile. Please try again.', type: 'error' });
@@ -147,6 +221,7 @@ export const HealthProvider = ({ children }) => {
   const deletePet = async (petId) => {
     if (!user) return;
     try {
+      await deletePetPhotosForPet(petId);
       await deleteDoc(doc(db, 'pets', petId));
     } catch (error) {
       console.error("Error deleting pet: ", error);
@@ -181,6 +256,9 @@ export const HealthProvider = ({ children }) => {
       }
 
       await updateDoc(doc(db, 'pets', petId), payload);
+      if (updatedFields.referencePhotos !== undefined) {
+        await syncPetPhotosCollection(petId, payload.referencePhotos);
+      }
     } catch (error) {
       console.error("Error updating pet: ", error);
       throw error;
@@ -188,7 +266,19 @@ export const HealthProvider = ({ children }) => {
   };
 
   return (
-    <HealthContext.Provider value={{ pets, healthLogs, addHealthLog, updateHealthLog, addPet, deletePet, updatePet }}>
+    <HealthContext.Provider
+      value={{
+        pets,
+        petPhotos,
+        healthLogs,
+        detectedAnomalies,
+        addHealthLog,
+        updateHealthLog,
+        addPet,
+        deletePet,
+        updatePet,
+      }}
+    >
       {children}
     </HealthContext.Provider>
   );

@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadows } from '../theme/colors';
-import { isDismissed, dismiss } from '../services/ads';
+import { isDismissed, dismiss, trackAdClick } from '../services/ads';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const openAd = (ad) => {
+  if (ad?.id) trackAdClick(ad.id);
   if (ad?.targetUrl) Linking.openURL(ad.targetUrl).catch(() => { });
 };
 

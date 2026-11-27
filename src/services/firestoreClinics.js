@@ -13,6 +13,29 @@ export async function getClinicsFromFirestore(userLat, userLon) {
       return await getNearbyVeterinarians(userLat, userLon);
     }
 
+    const schedulesByClinic = {};
+    try {
+      const schedSnap = await getDocs(collection(db, 'clinicSchedules'));
+      schedSnap.docs.forEach((schedDoc) => {
+        const sd = schedDoc.data();
+        const cid = sd.vetClinicId;
+        if (!cid) return;
+        if (!schedulesByClinic[cid]) schedulesByClinic[cid] = [];
+        schedulesByClinic[cid].push({
+          id: schedDoc.id,
+          clinicScheduleId: schedDoc.id,
+          vetClinicId: cid,
+          day: sd.day || '',
+          days: sd.day || '',
+          openTime: sd.openTime || '',
+          closeTime: sd.closeTime || '',
+          hours: (sd.openTime || sd.closeTime) ? `${sd.openTime || ''} - ${sd.closeTime || ''}` : '',
+        });
+      });
+    } catch (schedErr) {
+      console.warn('Could not fetch clinicSchedules collection:', schedErr?.message);
+    }
+
     const now = new Date();
     const clinics = snapshot.docs.map((doc) => {
       const data = doc.data();
@@ -28,7 +51,13 @@ export async function getClinicsFromFirestore(userLat, userLon) {
 
       const hoursStr = data.hours || data.openingHours || data.operatingHours || '';
       const openDaysStr = data.openDays || data.days || '';
-      const schedule = Array.isArray(data.schedule) ? data.schedule : [];
+      const collectionSchedule = schedulesByClinic[doc.id];
+      const schedule =
+        Array.isArray(collectionSchedule) && collectionSchedule.length > 0
+          ? collectionSchedule
+          : Array.isArray(data.schedule)
+            ? data.schedule
+            : [];
 
       const isOpen = isClinicOpenNow(
         {
@@ -48,6 +77,7 @@ export async function getClinicsFromFirestore(userLat, userLon) {
         phone: data.phone || data.contactNumber || data.contact || '',
         email: data.email || '',
         website: data.website || '',
+        status: data.status || 'active',
         rating: data.rating ?? 4.5,
         reviewCount: data.reviewCount ?? data.totalReviews ?? 0,
         isOpen,

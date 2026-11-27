@@ -478,6 +478,39 @@ export default function ScanScreen() {
     }
   };
 
+  const buildDetectedAnomaliesList = (scanResult, normalizedAlternatives) => {
+    if (!scanResult || String(scanResult.urgencyLevel || '').toLowerCase() === 'safe') {
+      return [];
+    }
+    const items = [];
+    const seen = new Set();
+    const pushItem = (name, confidence = null) => {
+      const cleanName = String(name || '').trim();
+      if (!cleanName || cleanName === 'No Visible Anomaly Detected') return;
+      const key = cleanName.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      items.push({
+        id: `da_${Date.now()}_${items.length}`,
+        name: cleanName,
+        condition: cleanName,
+        confidence,
+      });
+    };
+
+    if (scanResult.suspectedCondition) {
+      pushItem(scanResult.suspectedCondition, scanResult.confidence ?? null);
+    }
+    (normalizedAlternatives || []).forEach((alt) => {
+      pushItem(alt.name || alt.condition, alt.confidence ?? null);
+    });
+    (scanResult.detectedSymptoms || []).forEach((sym) => {
+      const label = typeof sym === 'string' ? sym : sym?.class_name;
+      if (label) pushItem(label, null);
+    });
+    return items;
+  };
+
   const autoSaveToPetRecord = async (analysis, pet, localUri, base64Data = null, existingUploadPromise = null) => {
     setAutoSaveStatus('saving');
     setAutoSavedPetName(pet.name);
@@ -488,6 +521,7 @@ export default function ScanScreen() {
         condition: alt.condition || alt.name || 'Unspecified Anomaly',
         confidence: alt.confidence ?? null,
       }));
+      const detectedAnomaliesList = buildDetectedAnomaliesList(analysis, normalizedAlternatives);
       const logPayload = {
         petId: pet.id,
         petName: pet.name,
@@ -504,7 +538,7 @@ export default function ScanScreen() {
         autoRecorded: true,
         confidence: analysis.confidence || null,
         alternatives: normalizedAlternatives,
-        detectedAnomalies: normalizedAlternatives,
+        detectedAnomalies: detectedAnomaliesList,
       };
 
       const docRef = await addHealthLog(logPayload);
@@ -558,6 +592,7 @@ export default function ScanScreen() {
         condition: alt.condition || alt.name || 'Unspecified Anomaly',
         confidence: alt.confidence ?? null,
       }));
+      const detectedAnomaliesList = buildDetectedAnomaliesList(result, normalizedAlternatives);
       const logPayload = {
         petId: petToSave.id,
         petName: petToSave.name,
@@ -574,7 +609,7 @@ export default function ScanScreen() {
         autoRecorded: false,
         confidence: result.confidence || null,
         alternatives: normalizedAlternatives,
-        detectedAnomalies: normalizedAlternatives,
+        detectedAnomalies: detectedAnomaliesList,
       };
       
       const docRef = await addHealthLog(logPayload);
