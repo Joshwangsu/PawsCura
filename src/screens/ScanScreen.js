@@ -22,7 +22,6 @@ import { useNavigation } from '@react-navigation/native';
 import { analyzePetCondition } from '../services/gemini';
 import {
   VALIDATION_STATUS,
-  normalizePetSpecies,
   verifyRegisteredPetSpecies,
 } from '../utils/petImageValidation';
 import { checkInternetConnectivity, classifyException, getErrorMessage } from '../utils/network';
@@ -205,7 +204,6 @@ export default function ScanScreen() {
   const [imageUri, setImageUri] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [imageMimeType, setImageMimeType] = useState('image/jpeg');
-  const [selectedPetId, setSelectedPetId] = useState(null);
   const [uploadedCloudUrl, setUploadedCloudUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -217,17 +215,6 @@ export default function ScanScreen() {
   const [autoSavedRecordId, setAutoSavedRecordId] = useState(null);
   const scrollViewRef = useRef(null);
   const isPickingRef = useRef(false);
-
-  const selectedPet =
-    pets.find((p) => p.id === selectedPetId) || (pets.length > 0 ? pets[0] : null);
-
-  useEffect(() => {
-    if (pets.length === 0) {
-      setSelectedPetId(null);
-    } else if (!selectedPetId || !pets.some((p) => p.id === selectedPetId)) {
-      setSelectedPetId(pets[0].id);
-    }
-  }, [pets, selectedPetId]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -323,7 +310,6 @@ export default function ScanScreen() {
     uri,
     base64Input,
     mimeType,
-    targetPet,
     { forceRevalidate = false } = {}
   ) => {
     setUploadedCloudUrl(null);
@@ -344,12 +330,9 @@ export default function ScanScreen() {
       const analysisResult = await analyzePetCondition(
         resolvedBase64,
         mimeType,
-        targetPet ? [targetPet] : pets,
+        pets,
         uri,
-        {
-          selectedPet: targetPet || null,
-          forceRevalidate,
-        }
+        { forceRevalidate }
       );
 
       if (
@@ -358,9 +341,7 @@ export default function ScanScreen() {
         analysisResult?.status === 'species_mismatch' ||
         analysisResult?.status === 'validation_failed'
       ) {
-        const allowRetryOrSwitch =
-          Boolean(analysisResult.canRetry) || analysisResult.status === 'species_mismatch';
-        if (allowRetryOrSwitch && resolvedBase64) {
+        if (analysisResult.canRetry && resolvedBase64) {
           setImageBase64(resolvedBase64);
         } else {
           setImageBase64(null);
@@ -376,7 +357,7 @@ export default function ScanScreen() {
           urgencyLevel: analysisResult.validationStatus || 'Invalid Image',
           analysis:
             analysisResult.validationReason ||
-            'Please upload a clear photo showing a single dog or cat matching your selected pet.',
+            'Please upload a clear photo showing a single dog or cat matching your registered pets.',
         });
         setLoading(false);
         return;
@@ -393,7 +374,6 @@ export default function ScanScreen() {
       Promise.resolve(incrementScanCount()).catch((e) => console.warn('Scan count update skipped:', e?.message));
 
       const matchedPet =
-        targetPet ||
         (analysisResult.matchedPetId && pets.find((p) => p.id === analysisResult.matchedPetId)) ||
         (pets.length > 0 ? pets[0] : null);
 
@@ -466,7 +446,7 @@ export default function ScanScreen() {
         setImageMimeType(mimeType);
         setImageBase64(asset.base64 || null);
 
-        await runAssessmentForImage(asset.uri, asset.base64 || null, mimeType, selectedPet, {
+        await runAssessmentForImage(asset.uri, asset.base64 || null, mimeType, {
           forceRevalidate: false,
         });
       }
@@ -566,7 +546,10 @@ export default function ScanScreen() {
   };
 
   const handleSaveToRecords = async (targetPet) => {
-    const petToSave = targetPet || selectedPet || (pets.length > 0 ? pets[0] : null);
+    const petToSave =
+      targetPet ||
+      (result?.matchedPetId && pets.find((p) => p.id === result.matchedPetId)) ||
+      (pets.length > 0 ? pets[0] : null);
     if (!result || result.isInvalidPetImage || !petToSave) {
       setShowPetModal(true);
       return;
@@ -680,65 +663,6 @@ export default function ScanScreen() {
         </LinearGradient>
 
         <View style={styles.bodyContent}>
-          {pets.length > 0 ? (
-            <View style={styles.petSelectorCard}>
-              <Text style={styles.petSelectorLabel}>Scanning For</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.petChipsRow}
-              >
-                {pets.map((pet) => {
-                  const isActive = selectedPet?.id === pet.id;
-                  const speciesLabel =
-                    normalizePetSpecies(pet.species) === 'cat'
-                      ? 'Cat'
-                      : normalizePetSpecies(pet.species) === 'dog'
-                        ? 'Dog'
-                        : pet.species || 'Pet';
-                  return (
-                    <TouchableOpacity
-                      key={pet.id}
-                      style={[styles.petChip, isActive && styles.petChipActive]}
-                      onPress={() => setSelectedPetId(pet.id)}
-                      activeOpacity={0.8}
-                      disabled={loading}
-                    >
-                      <Ionicons
-                        name="paw"
-                        size={14}
-                        color={isActive ? '#fff' : Colors.primary}
-                      />
-                      <Text
-                        style={[styles.petChipName, isActive && styles.petChipNameActive]}
-                        numberOfLines={1}
-                      >
-                        {pet.name}
-                      </Text>
-                      <Text
-                        style={[styles.petChipSpecies, isActive && styles.petChipSpeciesActive]}
-                      >
-                        {speciesLabel}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.noPetBanner}
-              onPress={() => navigation.navigate('Pets')}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="paw-outline" size={16} color={Colors.primary} />
-              <Text style={styles.noPetBannerText}>
-                Add a pet profile to verify species and auto-save scans
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-
         <View style={styles.viewfinderWrapper}>
           {imageUri ? (
             <View style={styles.imagePreviewContainer}>
@@ -792,34 +716,12 @@ export default function ScanScreen() {
               <Text style={styles.resultValue}>{result.analysis}</Text>
             </View>
 
-            {result.validationStatus === VALIDATION_STATUS.SPECIES_MISMATCH &&
-              pets
-                .filter((p) => normalizePetSpecies(p.species) === result.detectedSpecies)
-                .map((matchingPet) => (
-                  <TouchableOpacity
-                    key={matchingPet.id}
-                    style={styles.retryValidationBtn}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      setSelectedPetId(matchingPet.id);
-                      runAssessmentForImage(imageUri, imageBase64, imageMimeType, matchingPet, {
-                        forceRevalidate: false,
-                      });
-                    }}
-                  >
-                    <Ionicons name="swap-horizontal" size={18} color="#fff" />
-                    <Text style={styles.retryValidationBtnText}>
-                      Switch to {matchingPet.name} ({result.detectedSpecies}) & Continue
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-
             {result.canRetry && imageUri && (
               <TouchableOpacity
                 style={styles.retryValidationBtn}
                 activeOpacity={0.85}
                 onPress={() =>
-                  runAssessmentForImage(imageUri, imageBase64, imageMimeType, selectedPet, {
+                  runAssessmentForImage(imageUri, imageBase64, imageMimeType, {
                     forceRevalidate: true,
                   })
                 }
@@ -1145,83 +1047,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.lg,
     paddingBottom: 130,
-  },
-  petSelectorCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.sm,
-  },
-  petSelectorLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  petChipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 2,
-  },
-  petChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryBg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  petChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  petChipName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    maxWidth: 120,
-  },
-  petChipNameActive: {
-    color: '#fff',
-  },
-  petChipSpecies: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: BorderRadius.full,
-  },
-  petChipSpeciesActive: {
-    color: Colors.primaryDark,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  noPetBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryBg,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 10,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  noPetBannerText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
   },
   retryValidationBtn: {
     flexDirection: 'row',

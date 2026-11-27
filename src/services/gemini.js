@@ -16,6 +16,7 @@ import {
 import {
   VALIDATION_STATUS,
   computeImageFingerprint,
+  normalizePetSpecies,
   parseGeminiValidationResponse,
   verifyRegisteredPetSpecies,
 } from '../utils/petImageValidation.js';
@@ -537,44 +538,106 @@ export async function analyzePetCondition(
   imageUri = null,
   options = {}
 ) {
-  const targetPet =
-    options.selectedPet ||
-    (Array.isArray(registeredPets) && registeredPets.length > 0 ? registeredPets[0] : null);
+  const allPets = Array.isArray(registeredPets) ? registeredPets : [];
   const yoloRunner = options.yoloRunner || runLocalYoloScan;
   const descriptionGenerator = options.descriptionGenerator || generateTextDescriptionFromLocalFindings;
+  const petIdentifier = options.petIdentifier || visuallyIdentifyPet;
 
   const validation = await validatePetImageWithGemini(base64Image, mimeType, {
     forceRevalidate: Boolean(options.forceRevalidate),
   });
 
-  const speciesCheck = verifyRegisteredPetSpecies(validation, targetPet);
-  if (!speciesCheck.matched) {
-    return {
-      status: speciesCheck.status,
-      isValidPet: false,
-      validationStatus: speciesCheck.validationStatus,
-      detectedSpecies: validation.detectedSpecies || 'unknown',
-      expectedSpecies: speciesCheck.expectedSpecies || null,
-      animalVisibility: validation.animalVisibility || 'none',
-      animalCount: validation.animalCount ?? 0,
-      imageSuitability: validation.imageSuitability || 'unsuitable',
-      validationReason: speciesCheck.reason,
-      canRetry: Boolean(speciesCheck.canRetry),
-      errorCode: validation.errorCode || null,
-      validation,
-    };
+  let matchedPet = null;
+  let matchConfidence = null;
+  let matchReasoning = null;
+  let detectedSpecies = null;
+  let speciesVerified = false;
+
+  if (options.selectedPet) {
+    const speciesCheck = verifyRegisteredPetSpecies(validation, options.selectedPet);
+    if (!speciesCheck.matched) {
+      return {
+        status: speciesCheck.status,
+        isValidPet: false,
+        validationStatus: speciesCheck.validationStatus,
+        detectedSpecies: validation.detectedSpecies || 'unknown',
+        expectedSpecies: speciesCheck.expectedSpecies || null,
+        animalVisibility: validation.animalVisibility || 'none',
+        animalCount: validation.animalCount ?? 0,
+        imageSuitability: validation.imageSuitability || 'unsuitable',
+        validationReason: speciesCheck.reason,
+        canRetry: Boolean(speciesCheck.canRetry),
+        errorCode: validation.errorCode || null,
+        validation,
+      };
+    }
+    matchedPet = options.selectedPet;
+    detectedSpecies = speciesCheck.detectedSpecies;
+    speciesVerified = Boolean(speciesCheck.speciesVerified);
+  } else {
+    const baseCheck = verifyRegisteredPetSpecies(validation, null);
+    if (!baseCheck.matched) {
+      return {
+        status: baseCheck.status,
+        isValidPet: false,
+        validationStatus: baseCheck.validationStatus,
+        detectedSpecies: validation.detectedSpecies || 'unknown',
+        expectedSpecies: baseCheck.expectedSpecies || null,
+        animalVisibility: validation.animalVisibility || 'none',
+        animalCount: validation.animalCount ?? 0,
+        imageSuitability: validation.imageSuitability || 'unsuitable',
+        validationReason: baseCheck.reason,
+        canRetry: Boolean(baseCheck.canRetry),
+        errorCode: validation.errorCode || null,
+        validation,
+      };
+    }
+
+    detectedSpecies = baseCheck.detectedSpecies;
+    const matchingSpeciesPets = allPets.filter(
+      (p) => normalizePetSpecies(p?.species) === detectedSpecies
+    );
+
+    if (allPets.length > 0 && matchingSpeciesPets.length === 0) {
+      return {
+        status: 'species_mismatch',
+        isValidPet: false,
+        validationStatus: VALIDATION_STATUS.SPECIES_MISMATCH,
+        detectedSpecies,
+        expectedSpecies: normalizePetSpecies(allPets[0]?.species) || null,
+        animalVisibility: validation.animalVisibility || 'none',
+        animalCount: validation.animalCount ?? 1,
+        imageSuitability: validation.imageSuitability || 'suitable',
+        validationReason: `Species mismatch: The uploaded photo shows a ${detectedSpecies}, which does not match any of your registered pets. Please upload a photo of your registered pet or add a ${detectedSpecies} profile first.`,
+        canRetry: false,
+        errorCode: null,
+        validation,
+      };
+    } else if (matchingSpeciesPets.length === 1) {
+      matchedPet = matchingSpeciesPets[0];
+      speciesVerified = true;
+    } else if (matchingSpeciesPets.length > 1) {
+      const idResult = await petIdentifier(base64Image, mimeType, matchingSpeciesPets);
+      matchedPet =
+        matchingSpeciesPets.find((p) => p.id === idResult?.matchedPetId) ||
+        matchingSpeciesPets[0];
+      matchConfidence = idResult?.matchConfidence ?? null;
+      matchReasoning = idResult?.reasoning || null;
+      speciesVerified = true;
+    }
   }
 
   const petMatch = {
-    matchedPetId: targetPet ? targetPet.id : null,
-    matchedPetName: targetPet ? targetPet.name : 'your pet',
-    matchConfidence: null,
-    speciesVerified: Boolean(speciesCheck.speciesVerified),
-    validatedSpecies: speciesCheck.detectedSpecies,
+    matchedPetId: matchedPet ? matchedPet.id : null,
+    matchedPetName: matchedPet ? matchedPet.name : 'your pet',
+    matchConfidence,
+    matchReasoning,
+    speciesVerified,
+    validatedSpecies: detectedSpecies,
   };
 
   const targetPetName = petMatch.matchedPetName;
-  const targetPetsList = targetPet ? [targetPet] : [];
+  const targetPetsList = matchedPet ? [matchedPet] : [];
 
   const localYoloResult = await yoloRunner(base64Image, mimeType, targetPetsList, imageUri);
 
@@ -582,8 +645,10 @@ export async function analyzePetCondition(
     const offlineFallback = generateOfflineHashedFallback(base64Image, petMatch, targetPetName);
     return {
       ...offlineFallback,
-      validatedSpecies: speciesCheck.detectedSpecies,
-      speciesVerified: Boolean(speciesCheck.speciesVerified),
+      matchConfidence: petMatch.matchConfidence ?? null,
+      matchReasoning: petMatch.matchReasoning || null,
+      validatedSpecies: detectedSpecies,
+      speciesVerified,
       validation,
     };
   }
@@ -592,17 +657,18 @@ export async function analyzePetCondition(
     ...localYoloResult,
     matchedPetId: petMatch.matchedPetId,
     matchedPetName: targetPetName,
-    matchConfidence: null,
-    validatedSpecies: speciesCheck.detectedSpecies,
-    speciesVerified: Boolean(speciesCheck.speciesVerified),
+    matchConfidence: petMatch.matchConfidence ?? null,
+    matchReasoning: petMatch.matchReasoning || null,
+    validatedSpecies: detectedSpecies,
+    speciesVerified,
     validation,
   };
 
   const finalResult = await descriptionGenerator(annotatedLocal, petMatch);
   return {
     ...finalResult,
-    validatedSpecies: speciesCheck.detectedSpecies,
-    speciesVerified: Boolean(speciesCheck.speciesVerified),
+    validatedSpecies: detectedSpecies,
+    speciesVerified,
     validation,
   };
 }
